@@ -1,0 +1,7 @@
+node_modules
+.next
+work
+package-lock.json
+public
+docs/MASTER_PROJECT_PROMPT.txt
+docs/OSW_REQUIREMENTS.md

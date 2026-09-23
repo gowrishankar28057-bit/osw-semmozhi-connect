@@ -1,6 +1,6 @@
 # OSW handoff
 
-Updated: 2026-09-24. This document describes an initial implementation checkpoint, not a completed jury acceptance test.
+Updated: 2026-09-24. This document describes the current tested local checkpoint; it is not a completed physical-device or production acceptance test.
 
 ## Current architecture and stack
 
@@ -38,7 +38,7 @@ Workshop changes and QR operations lock the workshop row in a transaction to ser
 
 Signup explicitly creates PARTICIPANT regardless of submitted role. User password hashes are excluded from API user responses.
 
-## Implemented, not yet end-to-end accepted
+## Implemented and locally verified
 
 - Schema, initial migration and local PostgreSQL launcher.
 - Admin/Participant seed only; no Prem seed.
@@ -52,25 +52,24 @@ Signup explicitly creates PARTICIPANT regardless of submitted role. User passwor
 - Announcements, learning material HTTPS links, member discussion, attendance CSV export, profile updates.
 - Admin audit report and demo-only reset with typed RESET confirmation.
 - Responsive reference-inspired CSS and original PDF/certificate assets.
+- Animated frontend UX: route-aware entrance motion, staggered panels/cards, heritage image drift, button/sidebar/notification feedback, mobile overlay transitions and `prefers-reduced-motion` support. Motion uses CSS only and adds no runtime dependency.
+- Unit tests for attendance math and a local API integration workflow covering registration, role authorization, workshop lifecycle, presence, QR verification/rotation, certificate issuance/PDF access, notifications, community, materials and reset safeguards.
+- Meeting-room secrets are stripped from dashboard/list responses and returned only by the membership-gated `/meeting` endpoint.
+- QR challenge timestamps preserve millisecond precision while JWT expiry remains compatible with jose second-based claims.
 
 ## Partially completed / unimplemented
 
-- Full automated security and integration tests still need to be authored and run.
-- Browser/manual layout checks, live Jitsi join/leave/reconnect, QR rotation over 120 seconds, downloadable PDF layout and five-device flow remain unverified.
+- Live Jitsi join/leave/reconnect, physical QR scanning, five-device flow and production webhook delivery remain unverified. The local integration test does exercise the browser-presence contract, exact runtime attendance calculation and a real 120-second QR rotation.
 - Production trusted Jitsi callback adapter is not supplied. The API defines an authenticated adapter contract, not a native plug-and-play Jitsi webhook integration.
 - Public Neon/Vercel deployment is intentionally deferred until account values are supplied.
-- `npm test` and `npm run test:integration` currently reference tests that do not yet exist.
 
 ## Known bugs / review items
 
-- Workshop listing currently includes meetingRoom in serialized records; remove it and expose room only via the gated `/meeting` endpoint.
 - `attendanceWindow` automatic midpoint check is request-driven by active polling. It is not a background timer when no clients are polling.
-- QR createdAt rounds to seconds, so a fresh token can have less than a full 120 seconds remaining by up to 999 ms. Align exact validity behavior.
 - QR close controls should not show success when session is not active; review return handling and UI gating.
 - Browser heartbeats have a bounded 15-second grace; confirm reconnect and abrupt-disconnect behavior.
 - Trusted callback receipt uses AuthThrottle as a replay ledger; improve transactional replay handling and timestamp ordering before production.
 - Login/signup throttle needs IP/global abuse protection for production, beyond current per-email limit.
-- Dependencies audit flagged three high-severity entries stemming from Prisma config's deepmerge-ts. Review a safe upgrade/override, rerun migration/build.
 - Exact certificate background contains sample signatories. They remain part of user-supplied artwork. Variable text is masked in PDF; inspect the resulting PDF for alignment and Unicode behavior.
 
 ## Current checks and build errors
@@ -78,12 +77,15 @@ Signup explicitly creates PARTICIPANT regardless of submitted role. User passwor
 - `npm install`: completed, Prisma client generated.
 - `prisma migrate deploy`: passed against local PostgreSQL.
 - `npm run db:seed`: passed, seeded only requested users.
-- Backend TypeScript check: passed after fixing a missing brace.
-- Latest whole-project `npm run typecheck`: passed.
-- Latest `npm run lint`: passed with no findings.
-- Latest `npm run build`: passed, all 23 listed routes compiled. Next.js emitted a workspace-root warning due to an unrelated package-lock in the user home; set turbopack.root in a later checkpoint.
-- Automated workflow tests have not yet been written. Build/lint/typecheck passing does not constitute jury acceptance.
-- No full workflow or physical-device acceptance has been claimed.
+- `npm test`: passed, 7 attendance-math assertions/tests.
+- `npm run test:integration`: passed, 81 API/security/workflow assertions against local PostgreSQL; the test used real server time for session duration and QR rotation and generated a private PDF for visual QA.
+- `npm run typecheck`: passed.
+- `npm run lint`: passed with no findings.
+- `npm run build`: passed with Next.js 16.3.6; all 23 routes compiled. The build used `D:\\osw-build-tmp` for temporary files because the system drive was nearly full.
+- `npm audit --omit=dev --audit-level=high`: passed with 0 vulnerabilities after the `deepmerge-ts` override.
+- Certificate PDF visual QA passed against the supplied template: artwork remains intact, dynamic fields and verification QR render, and Unicode Tamil font embedding is available.
+- Browser visual QA confirmed the login artwork and motion styles at a narrow responsive viewport; the local dashboard preview was blocked once by the system drive reaching 0 bytes while PostgreSQL/Next dev were writing caches. The database was restarted and seeded successfully afterward.
+- No physical-device, live Jitsi or production deployment acceptance has been claimed.
 
 ## Required environment variables
 
@@ -149,7 +151,7 @@ Production PRESENCE_MODE=webhook ignores browser attendance writes. Trusted adap
 
 ## Exact next recommended task
 
-1. Finish initial GitHub checkpoint: verify private repo, secret scan, commit current safe work on codex-dev, push and verify remote SHA. Build/lint/typecheck now pass, so main may reference this compilation-tested baseline with the documented functional limitations.
-2. Fix known workshop-room exposure and exact QR lifetime. Add attendance math and authorization/QR integration tests, run them on local PostgreSQL.
-3. Run app, inspect UI at desktop/mobile, exercise actual Jitsi and certificate PDF. Update this document with evidence rather than assumptions.
-4. After every passing phase, commit/push codex-dev and advance main without rewriting history.
+1. Run a supervised manual flow with two browsers and a phone/camera: organizer start/end, participant join/leave/reconnect, QR scan/rotation, certificate download and public verification.
+2. Implement or connect the production Jitsi trusted webhook bridge and run the same flow with `PRESENCE_MODE=webhook`.
+3. When the user supplies a Neon project and Vercel account/team, apply the committed Prisma migration, configure fresh production secrets and deploy from `main`.
+4. After every passing phase, commit/push `codex-dev` and advance `main` without rewriting history.

@@ -13,3 +13,13 @@ Never commit real database URLs, passwords, signing keys, API keys, authenticati
 Server-side authorization, real stored registrations, trusted timestamps, rotating attendance QR validation and the exact unrounded 90% threshold are mandatory. Demo mode must never bypass eligibility. Browser Jitsi events are suitable only for supervised demo attendance; production requires trusted server presence callbacks.
 
 Do not wait for per-file approval. Public Vercel/Neon deployment is deferred until the user supplies account/project details. Preserve local work and report actual validation limits.
+
+<!-- BEGIN:nextjs-agent-rules -->
+
+# This is NOT the Next.js you know
+
+This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
+
+This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
+
+<!-- END:nextjs-agent-rules -->

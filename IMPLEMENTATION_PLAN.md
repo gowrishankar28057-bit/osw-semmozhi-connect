@@ -16,7 +16,7 @@ Reference review completed before coding: docs/Presentation1.pdf pages 2–5 and
 12. Public certificate verification and a separate permanent verification QR.
 13. Registered-user community, organizer announcements and learning material links.
 14. Explicitly marked demo records and Admin-only RESET confirmation, preserving seeded accounts.
-15. Responsive role dashboards matching approved references without copied example statistics.
+15. Responsive role dashboards matching approved references without copied example statistics, with restrained CSS motion and reduced-motion accessibility support.
 16. Security/integration tests, TypeScript, lint, production build, browser checks and deployment.
 
 ## External dependencies
@@ -27,7 +27,7 @@ User update: continue locally with environment placeholders. Do not provision/de
 
 ## Checkpoint status
 
-Initial implementation for phases 1–15 exists. Local PostgreSQL migration and seed passed. Whole-project TypeScript, lint and production build passed. Security/integration tests and manual browser/Jitsi/certificate inspection remain. No full jury acceptance claim. See HANDOFF.md for concrete known bugs and exact next task.
+Initial implementation for phases 1–16 exists. Local PostgreSQL migration and seed passed. The attendance unit suite (7 tests), local API/security workflow (81 assertions), TypeScript check, lint, production build and dependency audit all pass. The supplied certificate template has been rendered and visually inspected. The animated frontend layer has been checked at a narrow responsive viewport and includes a reduced-motion fallback. Live Jitsi, physical QR scanning, five-device acceptance and production deployment remain pending. No full jury acceptance claim. See HANDOFF.md for the exact next task.
 
 ## Certificate treatment
 

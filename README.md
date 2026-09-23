@@ -4,7 +4,7 @@ Workshop and learning management portal for the Central Institute of Classical T
 
 ## Current status
 
-Initial implementation exists and is being validated. Read HANDOFF.md for exact completed checks and remaining work. The five-device jury workflow has not yet been accepted. This is not a production-complete release.
+The local implementation is feature-complete for the supervised demo path and is being validated. Read HANDOFF.md for exact checks and remaining work. The five-device jury workflow, live Jitsi trust bridge and production deployment have not yet been accepted. This is not a production-complete release.
 
 ## Local development
 
@@ -37,7 +37,7 @@ npm run lint
 npm run build
 ```
 
-Test commands are defined in package.json; test files are still being added at the initial checkpoint.
+Test commands are defined in package.json. The current checkpoint includes seven attendance-math unit tests and a local API integration workflow with 81 assertions. `npm test`, `npm run typecheck`, `npm run lint`, and `npm run build` pass. The frontend includes route entrance motion, staggered panels/cards, hover/press feedback and a `prefers-reduced-motion` fallback.
 
 ## Deployment target
 
