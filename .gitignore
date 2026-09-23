@@ -1,0 +1,17 @@
+node_modules/
+.next/
+.env
+.env.*
+.env.local
+.env.production
+.env.development
+.env*.local
+!.env.example
+.vercel/
+*.tsbuildinfo
+work/
+test-results/
+*.pem
+*.key
+*.log
+coverage/

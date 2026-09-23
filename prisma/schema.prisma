@@ -1,0 +1,206 @@
+generator client {
+  provider = "prisma-client-js"
+}
+datasource db {
+  provider = "postgresql"
+  url = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+enum Role {
+  ADMIN
+  ORGANIZER
+  PARTICIPANT
+}
+enum WorkshopStatus {
+  DRAFT
+  PUBLISHED
+  ONGOING
+  COMPLETED
+  CANCELLED
+}
+enum RegistrationStatus {
+  CONFIRMED
+  CANCELLED
+}
+model User {
+  id String @id @default(cuid())
+  name String
+  email String @unique
+  passwordHash String
+  role Role @default(PARTICIPANT)
+  department String @default("")
+  enabled Boolean @default(true)
+  demo Boolean @default(false)
+  seeded Boolean @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  sessions AuthSession[]
+  workshops Workshop[]
+  registrations Registration[]
+  presence MeetingPresence[]
+  attendance AttendanceRecord[]
+  notifications Notification[]
+  messages CommunityMessage[]
+  certificates Certificate[]
+}
+model AuthSession {
+  id String @id @default(cuid())
+  tokenHash String @unique
+  userId String
+  user User @relation(fields:[userId],references:[id],onDelete:Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  @@index([userId])
+}
+model AuthThrottle {
+  key String @id
+  attempts Int @default(0)
+  windowStart DateTime @default(now())
+}
+model Workshop {
+  id String @id @default(cuid())
+  title String
+  description String
+  organizerId String
+  organizer User @relation(fields:[organizerId],references:[id])
+  speaker String
+  mode String @default("ONLINE")
+  location String @default("")
+  scheduledStart DateTime
+  scheduledEnd DateTime
+  registrationDeadline DateTime
+  capacity Int @default(100)
+  status WorkshopStatus @default(DRAFT)
+  meetingRoom String @unique
+  demo Boolean @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  session WorkshopSession?
+  registrations Registration[]
+  announcements Announcement[]
+  messages CommunityMessage[]
+  materials LearningMaterial[]
+  certificates Certificate[]
+  @@index([organizerId,status])
+}
+model WorkshopSession {
+  id String @id @default(cuid())
+  workshopId String @unique
+  workshop Workshop @relation(fields:[workshopId],references:[id],onDelete:Cascade)
+  actualStartedAt DateTime @default(now())
+  actualEndedAt DateTime?
+  attendanceVerificationOpenedAt DateTime?
+  attendanceVerificationClosedAt DateTime?
+  autoCheckAt DateTime
+  autoOpened Boolean @default(false)
+  currentChallengeId String?
+  presence MeetingPresence[]
+  challenges AttendanceChallenge[]
+  attendance AttendanceRecord[]
+}
+model Registration {
+  id String @id @default(cuid())
+  workshopId String
+  workshop Workshop @relation(fields:[workshopId],references:[id],onDelete:Cascade)
+  participantId String
+  participant User @relation(fields:[participantId],references:[id],onDelete:Cascade)
+  status RegistrationStatus @default(CONFIRMED)
+  registeredAt DateTime @default(now())
+  cancelledAt DateTime?
+  @@unique([workshopId,participantId])
+}
+model MeetingPresence {
+  id String @id @default(cuid())
+  sessionId String
+  session WorkshopSession @relation(fields:[sessionId],references:[id],onDelete:Cascade)
+  participantId String
+  participant User @relation(fields:[participantId],references:[id],onDelete:Cascade)
+  connectionId String
+  joinedAt DateTime @default(now())
+  leftAt DateTime?
+  lastSeenAt DateTime @default(now())
+  source String @default("browser")
+  @@index([sessionId,participantId])
+}
+model AttendanceChallenge {
+  id String @id
+  sessionId String
+  session WorkshopSession @relation(fields:[sessionId],references:[id],onDelete:Cascade)
+  nonceHash String
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+  active Boolean @default(true)
+  @@index([sessionId,active])
+}
+model AttendanceRecord {
+  id String @id @default(cuid())
+  sessionId String
+  session WorkshopSession @relation(fields:[sessionId],references:[id],onDelete:Cascade)
+  participantId String
+  participant User @relation(fields:[participantId],references:[id],onDelete:Cascade)
+  qrVerified Boolean @default(false)
+  verifiedAt DateTime?
+  presenceSeconds Float @default(0)
+  attendancePercentage Float @default(0)
+  eligible Boolean @default(false)
+  @@unique([sessionId,participantId])
+}
+model Notification {
+  id String @id @default(cuid())
+  userId String
+  user User @relation(fields:[userId],references:[id],onDelete:Cascade)
+  message String
+  href String
+  readAt DateTime?
+  demo Boolean @default(false)
+  createdAt DateTime @default(now())
+  @@index([userId,createdAt])
+}
+model Announcement {
+  id String @id @default(cuid())
+  workshopId String
+  workshop Workshop @relation(fields:[workshopId],references:[id],onDelete:Cascade)
+  message String
+  createdAt DateTime @default(now())
+}
+model CommunityMessage {
+  id String @id @default(cuid())
+  workshopId String
+  workshop Workshop @relation(fields:[workshopId],references:[id],onDelete:Cascade)
+  userId String
+  user User @relation(fields:[userId],references:[id],onDelete:Cascade)
+  message String
+  createdAt DateTime @default(now())
+  @@index([workshopId,createdAt])
+}
+model LearningMaterial {
+  id String @id @default(cuid())
+  workshopId String
+  workshop Workshop @relation(fields:[workshopId],references:[id],onDelete:Cascade)
+  title String
+  url String
+  createdAt DateTime @default(now())
+}
+model Certificate {
+  id String @id @default(uuid())
+  certificateNumber String @unique
+  participantId String
+  participant User @relation(fields:[participantId],references:[id],onDelete:Cascade)
+  workshopId String
+  workshop Workshop @relation(fields:[workshopId],references:[id],onDelete:Cascade)
+  participantName String
+  workshopTitle String
+  speaker String
+  workshopDate DateTime
+  attendancePercentage Float
+  issuedAt DateTime @default(now())
+  @@unique([participantId,workshopId])
+}
+model AuditLog {
+  id String @id @default(cuid())
+  actorId String?
+  action String
+  detail String
+  demo Boolean @default(false)
+  createdAt DateTime @default(now())
+}
