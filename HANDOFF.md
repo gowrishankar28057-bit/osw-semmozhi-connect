@@ -84,7 +84,7 @@ Signup explicitly creates PARTICIPANT regardless of submitted role. User passwor
 - `npm run build`: passed with Next.js 16.3.6; all 23 routes compiled. The build used `D:\\osw-build-tmp` for temporary files because the system drive was nearly full.
 - `npm audit --omit=dev --audit-level=high`: passed with 0 vulnerabilities after the `deepmerge-ts` override.
 - Certificate PDF visual QA passed against the supplied template: artwork remains intact, dynamic fields and verification QR render, and Unicode Tamil font embedding is available.
-- Browser visual QA confirmed the login artwork and motion styles at a narrow responsive viewport; the local dashboard preview was blocked once by the system drive reaching 0 bytes while PostgreSQL/Next dev were writing caches. The database was restarted and seeded successfully afterward.
+- Browser visual QA confirmed the login artwork and motion styles at a narrow responsive viewport; the document now declares smooth scrolling explicitly for Next.js route transitions. The local dashboard preview was blocked once by the system drive reaching 0 bytes while PostgreSQL/Next dev were writing caches. The database was restarted and seeded successfully afterward.
 - No physical-device, live Jitsi or production deployment acceptance has been claimed.
 
 ## Required environment variables
