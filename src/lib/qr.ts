@@ -73,7 +73,9 @@ async function tokenFor(c: AttendanceChallenge) {
     .sign(key());
 }
 const isOpen = (s: WorkshopSession) =>
-  Boolean(s.attendanceVerificationOpenedAt && !s.attendanceVerificationClosedAt);
+  Boolean(
+    s.attendanceVerificationOpenedAt && !s.attendanceVerificationClosedAt,
+  );
 /** The midpoint check fires once, and only if verification was never opened. */
 const autoOpenDue = (s: WorkshopSession, now: Date) =>
   !s.autoOpened && !s.attendanceVerificationOpenedAt && now >= s.autoCheckAt;
@@ -183,7 +185,13 @@ export async function attendanceWindow(
           autoOpened: true,
         },
       });
-      await audit(tx, actor.id, "Attendance verification closed", w.title, w.demo);
+      await audit(
+        tx,
+        actor.id,
+        "Attendance verification closed",
+        w.title,
+        w.demo,
+      );
       return { open: false, expiresAt: null, url: null, serverNow: now };
     }
     // "demo" is the same real verification window, just triggered on demand.
@@ -224,8 +232,13 @@ export async function verifyAttendance(token: string, actor: Actor) {
     if (e instanceof errors.JWTExpired) throw expired();
     throw new AppError(400, "Invalid attendance code.", "QR_INVALID");
   }
-  const { sessionId, challengeId, nonce: rawNonce, issuedAt, expiresAt } =
-    payload;
+  const {
+    sessionId,
+    challengeId,
+    nonce: rawNonce,
+    issuedAt,
+    expiresAt,
+  } = payload;
   assert(
     typeof sessionId === "string" &&
       typeof challengeId === "string" &&

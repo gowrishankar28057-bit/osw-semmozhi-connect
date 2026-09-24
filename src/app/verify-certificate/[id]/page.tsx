@@ -1,10 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ShieldCheck, XCircle } from "lucide-react";
-import {
-  findCertificate,
-  publicCertificate,
-} from "@/lib/certificate-records";
+import { findCertificate, publicCertificate } from "@/lib/certificate-records";
 import { percent } from "@/lib/format";
 export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
@@ -83,8 +80,8 @@ export default async function Page({
             <p className="eyebrow">VERIFICATION FAILED</p>
             <h1>CERTIFICATE NOT FOUND</h1>
             <p>
-              No OSW certificate matches this link or ID. The certificate may
-              be forged, mistyped or revoked.
+              No OSW certificate matches this link or ID. The certificate may be
+              forged, mistyped or revoked.
             </p>
           </>
         )}

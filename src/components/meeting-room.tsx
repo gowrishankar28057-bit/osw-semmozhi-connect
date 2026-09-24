@@ -152,7 +152,13 @@ export function MeetingRoom({
   );
 }
 
-function StagePlaceholder({ live, owner }: { live: LiveState; owner: boolean }) {
+function StagePlaceholder({
+  live,
+  owner,
+}: {
+  live: LiveState;
+  owner: boolean;
+}) {
   if (live.status === "COMPLETED")
     return (
       <div className="stage-overlay static">
@@ -252,7 +258,9 @@ function AttendanceBar({
         </div>
         <div className="status-cell">
           <div>
-            <small>{completed ? "Final attendance" : "Attendance so far"}</small>
+            <small>
+              {completed ? "Final attendance" : "Attendance so far"}
+            </small>
             <b>{percent(me?.attendancePercentage ?? 0)}</b>
             <small>90.00% required</small>
           </div>

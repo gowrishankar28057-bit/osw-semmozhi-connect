@@ -1,9 +1,5 @@
 import { randomBytes, randomUUID } from "node:crypto";
-import {
-  Prisma,
-  type Workshop,
-  type WorkshopSession,
-} from "@prisma/client";
+import { Prisma, type Workshop, type WorkshopSession } from "@prisma/client";
 import { db } from "./db";
 import { assert } from "./errors";
 import type { Actor } from "./auth";
@@ -336,7 +332,9 @@ export async function register(id: string, actor: Actor, cancel = false) {
     // Joining late is allowed until the organizer's deadline; attendance is
     // still measured from the actual session start, so it cannot be gamed.
     assert(
-      cancel ? w.status === "PUBLISHED" : ["PUBLISHED", "ONGOING"].includes(w.status),
+      cancel
+        ? w.status === "PUBLISHED"
+        : ["PUBLISHED", "ONGOING"].includes(w.status),
       409,
       cancel
         ? "Registration can only be cancelled before the workshop starts."
@@ -447,8 +445,7 @@ export async function attendanceRows(id: string, actor: Actor) {
       status: r.status,
       meetingJoined: presence.some((p) => !p.leftAt || p.leftAt > p.joinedAt),
       inMeeting:
-        w.status === "ONGOING" &&
-        presence.some((p) => isActiveSegment(p, now)),
+        w.status === "ONGOING" && presence.some((p) => isActiveSegment(p, now)),
       qrVerified: record?.qrVerified ?? false,
       verifiedAt: record?.verifiedAt,
       ...stats,

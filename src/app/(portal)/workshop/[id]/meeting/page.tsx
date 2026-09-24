@@ -26,7 +26,10 @@ export default async function Page({
       user.role === "PARTICIPANT"
         ? await db.registration.findUnique({
             where: {
-              workshopId_participantId: { workshopId: id, participantId: user.id },
+              workshopId_participantId: {
+                workshopId: id,
+                participantId: user.id,
+              },
             },
           })
         : null;

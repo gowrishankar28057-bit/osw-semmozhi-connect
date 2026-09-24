@@ -170,7 +170,9 @@ export async function recordPresence(
       if (current) {
         await tx.meetingPresence.update({
           where: { id: current.id },
-          data: { leftAt: new Date(current.lastSeenAt.getTime() + HEARTBEAT_GRACE_MS) },
+          data: {
+            leftAt: new Date(current.lastSeenAt.getTime() + HEARTBEAT_GRACE_MS),
+          },
         });
         return { success: false, expired: true };
       }
@@ -191,7 +193,9 @@ export async function recordPresence(
       ) {
         await tx.meetingPresence.update({
           where: { id: current.id },
-          data: { leftAt: new Date(current.lastSeenAt.getTime() + HEARTBEAT_GRACE_MS) },
+          data: {
+            leftAt: new Date(current.lastSeenAt.getTime() + HEARTBEAT_GRACE_MS),
+          },
         });
         if (action === "heartbeat") return { success: false, expired: true };
       } else

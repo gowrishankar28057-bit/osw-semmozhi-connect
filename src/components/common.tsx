@@ -28,7 +28,9 @@ export async function api<T>(
   } catch {
     // e.g. a hosting error page instead of the API's JSON.
     throw Object.assign(
-      new Error(`The server is unavailable (HTTP ${res.status}). Please retry.`),
+      new Error(
+        `The server is unavailable (HTTP ${res.status}). Please retry.`,
+      ),
       { status: res.status },
     );
   }

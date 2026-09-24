@@ -66,7 +66,10 @@ export function AttendanceVerification({ token }: { token: string }) {
               Keep attending the meeting. Certificates require at least 90%
               meeting presence as well as this verification.
             </p>
-            <Link className="button" href={`/workshop/${result.workshopId}/meeting`}>
+            <Link
+              className="button"
+              href={`/workshop/${result.workshopId}/meeting`}
+            >
               Back to the meeting
             </Link>
           </>

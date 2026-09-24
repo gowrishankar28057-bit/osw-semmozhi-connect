@@ -196,19 +196,20 @@ export function WorkshopDetail({
                 Register
               </Action>
             ))}
-          {(owner || registered) && ["PUBLISHED", "ONGOING"].includes(w.status) && (
-            <Link
-              className={`button ${w.status === "ONGOING" ? "" : "secondary"}`}
-              href={meetingHref}
-            >
-              <Video size={18} />
-              {owner
-                ? "Open control panel"
-                : w.status === "ONGOING"
-                  ? "Join workshop"
-                  : "Open meeting room"}
-            </Link>
-          )}
+          {(owner || registered) &&
+            ["PUBLISHED", "ONGOING"].includes(w.status) && (
+              <Link
+                className={`button ${w.status === "ONGOING" ? "" : "secondary"}`}
+                href={meetingHref}
+              >
+                <Video size={18} />
+                {owner
+                  ? "Open control panel"
+                  : w.status === "ONGOING"
+                    ? "Join workshop"
+                    : "Open meeting room"}
+              </Link>
+            )}
         </div>
       </div>
       <div className="tabs">
@@ -403,7 +404,8 @@ export function QrDisplay({
   }, [w]);
   useEffect(() => {
     if (!presenting) return;
-    const close = (e: KeyboardEvent) => e.key === "Escape" && setPresenting(false);
+    const close = (e: KeyboardEvent) =>
+      e.key === "Escape" && setPresenting(false);
     window.addEventListener("keydown", close);
     return () => window.removeEventListener("keydown", close);
   }, [presenting]);

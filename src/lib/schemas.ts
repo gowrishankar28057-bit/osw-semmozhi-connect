@@ -32,9 +32,7 @@ export const messageInput = z.object({
 });
 export const materialInput = z.object({
   title: z.string().trim().min(2).max(150),
-  url: z
-    .url()
-    .refine((x) => new URL(x).protocol === "https:", {
-      message: "Use a secure https:// resource URL.",
-    }),
+  url: z.url().refine((x) => new URL(x).protocol === "https:", {
+    message: "Use a secure https:// resource URL.",
+  }),
 });

@@ -105,7 +105,10 @@ try {
     await confirm(w1.id, p.id);
   await db.registration.update({
     where: {
-      workshopId_participantId: { workshopId: w1.id, participantId: cancelled.id },
+      workshopId_participantId: {
+        workshopId: w1.id,
+        participantId: cancelled.id,
+      },
     },
     data: { status: "CANCELLED" },
   });
@@ -191,9 +194,11 @@ try {
   for (const p of [alice, bob, carol]) await confirm(w2.id, p.id);
   await changeState(w2.id, org, "start");
   check(
-    (await db.notification.findFirst({
-      where: { userId: alice.id, kind: "WORKSHOP_STARTED" },
-    }))?.href === `/workshop/${w2.id}/meeting`,
+    (
+      await db.notification.findFirst({
+        where: { userId: alice.id, kind: "WORKSHOP_STARTED" },
+      })
+    )?.href === `/workshop/${w2.id}/meeting`,
     "start notification opens the meeting page",
   );
   const participantView = await attendanceWindow(w2.id, alice, "read");
@@ -226,9 +231,13 @@ try {
     .setProtectedHeader({ alg: "HS256", typ: "JWT" })
     .sign(new TextEncoder().encode("f".repeat(64)));
   await rejects(verifyAttendance(forged, alice), 400, "QR_INVALID", "forged");
-  const b64 = (v: unknown) => Buffer.from(JSON.stringify(v)).toString("base64url");
+  const b64 = (v: unknown) =>
+    Buffer.from(JSON.stringify(v)).toString("base64url");
   await rejects(
-    verifyAttendance(`${b64({ alg: "none", typ: "JWT" })}.${b64(claims)}.`, alice),
+    verifyAttendance(
+      `${b64({ alg: "none", typ: "JWT" })}.${b64(claims)}.`,
+      alice,
+    ),
     400,
     "QR_INVALID",
     "unsigned alg:none token",
@@ -330,12 +339,14 @@ try {
     "midpoint opening notifies once",
   );
   check(
-    (await db.auditLog.findFirst({
-      where: {
-        action: "Attendance verification opened automatically",
-        detail: w3.title,
-      },
-    }))?.actorId === null,
+    (
+      await db.auditLog.findFirst({
+        where: {
+          action: "Attendance verification opened automatically",
+          detail: w3.title,
+        },
+      })
+    )?.actorId === null,
     "automatic opening is attributed to the system",
   );
   const w4 = await workshop(org.id, "PUBLISHED");
@@ -367,12 +378,19 @@ try {
   await changeState(w5.id, org, "start");
   await register(w5.id, frank);
   check(
-    (await db.registration.findFirst({
-      where: { workshopId: w5.id, participantId: frank.id },
-    }))?.status === "CONFIRMED",
+    (
+      await db.registration.findFirst({
+        where: { workshopId: w5.id, participantId: frank.id },
+      })
+    )?.status === "CONFIRMED",
     "registration during the live session before the deadline",
   );
-  await rejects(register(w5.id, frank, true), 409, undefined, "cancel after start");
+  await rejects(
+    register(w5.id, frank, true),
+    409,
+    undefined,
+    "cancel after start",
+  );
   await db.workshop.update({
     where: { id: w5.id },
     data: { registrationDeadline: new Date(Date.now() - 1000) },
@@ -408,13 +426,51 @@ try {
     "webhook presence shows as recording",
   );
   for (const [event, message] of [
-    [{ ...joined, idempotencyKey: `${tag}-org`, data: { id: org.id, participantId: "ep-org" } }, "organizer"],
-    [{ ...joined, idempotencyKey: `${tag}-ivan`, data: { id: ivan.id, participantId: "ep-ivan" } }, "unregistered"],
-    [{ ...joined, idempotencyKey: `${tag}-app`, fqn: `vpaas-magic-cookie-other/${w6.meetingRoom}` }, "other JaaS app"],
-    [{ ...joined, idempotencyKey: `${tag}-room`, fqn: `${JAAS_APP}/osw-unknown` }, "unknown room"],
-    [{ ...joined, eventType: "ROOM_CREATED", idempotencyKey: `${tag}-room-created` }, "other event types"],
+    [
+      {
+        ...joined,
+        idempotencyKey: `${tag}-org`,
+        data: { id: org.id, participantId: "ep-org" },
+      },
+      "organizer",
+    ],
+    [
+      {
+        ...joined,
+        idempotencyKey: `${tag}-ivan`,
+        data: { id: ivan.id, participantId: "ep-ivan" },
+      },
+      "unregistered",
+    ],
+    [
+      {
+        ...joined,
+        idempotencyKey: `${tag}-app`,
+        fqn: `vpaas-magic-cookie-other/${w6.meetingRoom}`,
+      },
+      "other JaaS app",
+    ],
+    [
+      {
+        ...joined,
+        idempotencyKey: `${tag}-room`,
+        fqn: `${JAAS_APP}/osw-unknown`,
+      },
+      "unknown room",
+    ],
+    [
+      {
+        ...joined,
+        eventType: "ROOM_CREATED",
+        idempotencyKey: `${tag}-room-created`,
+      },
+      "other event types",
+    ],
   ] as const)
-    check("ignored" in (await recordJaasEvent(event)), `JaaS ignores ${message}`);
+    check(
+      "ignored" in (await recordJaasEvent(event)),
+      `JaaS ignores ${message}`,
+    );
   const token6 = tokenOf((await attendanceWindow(w6.id, org, "open")).url);
   await recordJaasEvent({
     ...joined,

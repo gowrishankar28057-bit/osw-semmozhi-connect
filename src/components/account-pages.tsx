@@ -29,6 +29,7 @@ import type {
 } from "@/lib/types";
 import { percent } from "@/lib/format";
 import { AttendanceTable, downloadAttendance } from "./workshop-detail";
+import { noticeTitle } from "./shell";
 export function Notifications() {
   const { data, error, refresh } = usePoll<Notice[]>("notifications");
   return (
@@ -60,6 +61,7 @@ export function Notifications() {
               key={n.id}
             >
               <div>
+                <small className="notice-kind">{noticeTitle(n.kind)}</small>
                 <Link
                   href={n.href}
                   onClick={() =>

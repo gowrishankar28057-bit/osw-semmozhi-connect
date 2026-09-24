@@ -205,7 +205,7 @@ export function JitsiMeeting({
           <p>
             {phase === "left"
               ? "You have left the meeting. Attendance recording has stopped."
-              : "The meeting could not be opened."}
+              : error || "The meeting could not be opened."}
           </p>
           <button className="button gold" onClick={rejoin}>
             <RotateCcw size={17} />
@@ -214,7 +214,7 @@ export function JitsiMeeting({
         </div>
       )}
       <div className="jitsi-toolbar">
-        <ErrorBox message={error} />
+        {phase !== "error" && <ErrorBox message={error} />}
         {(phase === "joined" || phase === "ready") && (
           <button
             className="button secondary small"

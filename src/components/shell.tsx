@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Home,
   Users,
@@ -28,7 +28,32 @@ export function Shell({
     router = useRouter(),
     [open, setOpen] = useState(false),
     [error, setError] = useState("");
-  const { data: notices } = usePoll<Notice[]>("notifications");
+  const { data: notices, refresh: refreshNotices } =
+    usePoll<Notice[]>("notifications");
+  const seen = useRef<Set<string> | null>(null),
+    [toasts, setToasts] = useState<Notice[]>([]);
+  useEffect(() => {
+    if (!notices) return;
+    // Everything present at page load is "seen"; only newer arrivals pop up.
+    if (!seen.current) {
+      seen.current = new Set(notices.map((n) => n.id));
+      return;
+    }
+    const fresh = notices.filter((n) => !n.readAt && !seen.current!.has(n.id));
+    fresh.forEach((n) => seen.current!.add(n.id));
+    if (fresh.length) setToasts((t) => [...fresh, ...t].slice(0, 3));
+  }, [notices]);
+  useEffect(() => {
+    if (!toasts.length) return;
+    const timer = setTimeout(() => setToasts((t) => t.slice(0, -1)), 12_000);
+    return () => clearTimeout(timer);
+  }, [toasts]);
+  const openNotice = async (n: Notice) => {
+    setToasts((t) => t.filter((x) => x.id !== n.id));
+    router.push(n.href);
+    await api(`notifications/${n.id}`, {}).catch(() => undefined);
+    await refreshNotices();
+  };
   const base = `/${user.role.toLowerCase()}`;
   const links =
     user.role === "ADMIN"
@@ -164,6 +189,30 @@ export function Shell({
             {children}
           </div>
         </main>
+        {toasts.length > 0 && (
+          <div className="toast-stack" aria-live="polite">
+            {toasts.map((n) => (
+              <div className="toast" key={n.id} role="status">
+                <button
+                  className="toast-body"
+                  onClick={() => void openNotice(n)}
+                >
+                  <strong>{noticeTitle(n.kind)}</strong>
+                  <span>{n.message}</span>
+                </button>
+                <button
+                  className="toast-close"
+                  aria-label="Dismiss notification"
+                  onClick={() =>
+                    setToasts((t) => t.filter((x) => x.id !== n.id))
+                  }
+                >
+                  <X size={16} />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
         <footer className="app-footer">
           <span>
             <b>OSW</b> · Semmozhi Connect
@@ -174,3 +223,13 @@ export function Shell({
     </div>
   );
 }
+const titles: Record<string, string> = {
+  WORKSHOP_PUBLISHED: "NEW WORKSHOP",
+  REGISTRATION: "REGISTRATION CONFIRMED",
+  WORKSHOP_STARTED: "WORKSHOP STARTED",
+  ATTENDANCE_OPEN: "ATTENDANCE VERIFICATION",
+  ANNOUNCEMENT: "ANNOUNCEMENT",
+  CERTIFICATE: "CERTIFICATE READY",
+};
+export const noticeTitle = (kind?: string) =>
+  titles[kind ?? ""] ?? "NOTIFICATION";

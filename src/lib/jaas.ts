@@ -107,8 +107,7 @@ export function verifyJaasSignature(
   return signatures.some((signature) => {
     const received = Buffer.from(signature);
     return (
-      received.length === expected.length &&
-      timingSafeEqual(received, expected)
+      received.length === expected.length && timingSafeEqual(received, expected)
     );
   });
 }

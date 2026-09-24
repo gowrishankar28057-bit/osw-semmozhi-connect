@@ -312,7 +312,10 @@ try {
   const page = await fetch(`${base}/verify-certificate/${cert.id}`);
   const html = await page.text();
   assert.equal(page.status, 200);
-  assert(html.includes("CERTIFICATE VERIFIED") && html.includes(cert.participantName));
+  assert(
+    html.includes("CERTIFICATE VERIFIED") &&
+      html.includes(cert.participantName),
+  );
   assert(!html.includes("@example.test"), "No private email on public page");
   assertions += 3;
   const missing = await fetch(`${base}/verify-certificate/not-a-certificate`);
@@ -322,19 +325,25 @@ try {
     redirect: "manual",
   });
   assert.equal(legacy.status, 308);
-  assert(legacy.headers.get("location")?.endsWith(`/verify-certificate/${cert.id}`));
+  assert(
+    legacy.headers.get("location")?.endsWith(`/verify-certificate/${cert.id}`),
+  );
   assertions += 2;
   const adminPage = await fetch(`${base}/admin`, {
     headers: { Cookie: participant.cookie },
     redirect: "manual",
   });
   assert([303, 307, 308].includes(adminPage.status));
-  assert.notEqual(new URL(adminPage.headers.get("location")!, base).pathname, "/admin");
+  assert.notEqual(
+    new URL(adminPage.headers.get("location")!, base).pathname,
+    "/admin",
+  );
   assertions += 2;
   await participant.request("system", undefined, 403);
-  const system = await admin.request<{ presenceMode: string; warnings: string[] }>(
-    "system",
-  );
+  const system = await admin.request<{
+    presenceMode: string;
+    warnings: string[];
+  }>("system");
   assert(system.presenceMode && Array.isArray(system.warnings));
   assertions++;
   const pdf = await fetch(`${base}/api/certificate/${cert.id}/pdf?download=1`, {
@@ -370,7 +379,8 @@ try {
   // A request whose Origin matches its own Host is accepted even when the
   // configured public URL uses another hostname (e.g. *.vercel.app).
   const loopback = new URL(base);
-  loopback.hostname = loopback.hostname === "localhost" ? "127.0.0.1" : "localhost";
+  loopback.hostname =
+    loopback.hostname === "localhost" ? "127.0.0.1" : "localhost";
   const sameHost = await fetch(`${loopback.origin}/api/auth/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json", Origin: loopback.origin },

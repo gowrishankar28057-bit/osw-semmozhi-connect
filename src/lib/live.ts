@@ -34,7 +34,10 @@ export async function liveState(id: string, actor: Actor) {
     actor.role === "PARTICIPANT"
       ? await db.registration.findUnique({
           where: {
-            workshopId_participantId: { workshopId: id, participantId: actor.id },
+            workshopId_participantId: {
+              workshopId: id,
+              participantId: actor.id,
+            },
           },
         })
       : null;
@@ -74,8 +77,7 @@ export async function liveState(id: string, actor: Actor) {
     );
     me = {
       recording:
-        w.status === "ONGOING" &&
-        segments.some((x) => isActiveSegment(x, now)),
+        w.status === "ONGOING" && segments.some((x) => isActiveSegment(x, now)),
       presenceSeconds: stats.presenceSeconds,
       attendancePercentage: stats.attendancePercentage,
       qrVerified: record?.qrVerified ?? false,

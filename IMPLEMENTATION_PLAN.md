@@ -38,3 +38,7 @@ Keep supplied PNG byte-for-byte. Cover only variable sample text with a white fi
 Completed reconnect request ordering, duplicate join suppression, initial-join retry, fresh connection IDs after expiry, atomic trusted-callback receipts, and conservative handling of leave-before-join. Stale segment closure now commits even when the caller receives an expiry error. Inactive workshop QR controls are hidden. Zero-length leave records do not appear as successful meeting joins.
 
 Validation: 12 unit tests; dedicated PostgreSQL presence/replay tests with real 31-second expiry; the 81-assertion API workflow against a production build; Admin login/dashboard browser verification; TypeScript, lint and production build. Physical devices/live Jitsi and external hosting remain pending as described in HANDOFF.md.
+
+## Backend hardening checkpoint (2026-09-24)
+
+Completed: JaaS provider + signed webhook presence, presence-required QR verification, in-OSW meeting page with organizer control panel, public `/verify-certificate/[id]`, notification toasts, readiness panel, index migration, deployment prep (appUrl, origin policy, file tracing, Permissions-Policy, build:vercel). All automated suites pass (see HANDOFF.md). Pending: live JaaS/phone rehearsal on the deployed HTTPS site.
