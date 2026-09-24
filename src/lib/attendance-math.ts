@@ -4,6 +4,18 @@ export type Segment = {
   lastSeenAt: Date;
   source: string;
 };
+/** A browser segment without a heartbeat for this long is treated as gone. */
+export const STALE_AFTER_MS = 30_000;
+/** A silent browser segment is credited this long past its last heartbeat. */
+export const HEARTBEAT_GRACE_MS = 15_000;
+/** Is this segment a live connection right now (server's view)? */
+export function isActiveSegment(s: Segment, now: Date) {
+  return (
+    s.leftAt === null &&
+    (s.source === "webhook" ||
+      now.getTime() - s.lastSeenAt.getTime() < STALE_AFTER_MS)
+  );
+}
 export function calculateAttendance(
   start: Date,
   end: Date,
@@ -22,7 +34,7 @@ export function calculateAttendance(
         s.leftAt?.getTime() ??
           (s.source === "webhook"
             ? to
-            : Math.min(to, s.lastSeenAt.getTime() + 15_000)),
+            : Math.min(to, s.lastSeenAt.getTime() + HEARTBEAT_GRACE_MS)),
       ),
     ])
     .filter(([a, b]) => b > a)

@@ -2,6 +2,23 @@
 
 Updated: 2026-09-24. This document describes the current tested local checkpoint; it is not a completed physical-device or production acceptance test.
 
+## 2026-09-24 backend/security pass (branch claude/semmozhi-connect-audit-ugai92)
+
+See BACKEND_AUDIT.md (findings) and docs/DEMO_RUNBOOK.md (5-device script + JaaS/Neon/Vercel setup).
+
+Done and verified locally (PostgreSQL 16, `next start` production build):
+- In-OSW meeting page `/workshop/[id]/meeting`: embedded Jitsi (External API), participant status bar (Recording / meeting time / session time / attendance % / QR), organizer control panel (Start/End meeting, open/close verification, demo trigger, rotating QR + full-screen, live attendance).
+- JaaS (8x8.vc) provider: RS256 room-scoped JWT; `/api/jaas-webhook` trusted presence (X-Jaas-Signature HMAC). Public meet.jit.si cuts embedded calls at 5 min: use JaaS for the jury.
+- QR verification now also requires live server-observed meeting presence; duplicate check first; old/rotated/forged/alg:none/expired codes rejected.
+- `/verify-certificate/[id]` server-rendered public page (legacy path 308-redirects); certificate QR points there.
+- Notification toasts, dashboard JOIN WORKSHOP, admin organizer password reset, admin deployment-readiness panel, form date defaults.
+- appUrl() runtime URL, same-host origin check, IP+account login throttling, Permissions-Policy for 8x8.vc/meet.jit.si, certificate assets traced for Vercel, index migration `202609240002_backend_hardening`.
+- Checks: lint, typecheck, build pass; `npm test` 20/20; `npm run test:backend` 49 checks; `npm run test:presence` pass; `npm run test:integration` 122 assertions (real 120 s rotation); Playwright UI walk-through of the full flow.
+
+Not verified here: live Jitsi media (sandbox egress blocks meet.jit.si/8x8.vc), physical phones, Vercel/Neon deploy, real JaaS webhook payloads (adapter built from documented format; confirm `data.id`/`participantId` on first live event).
+Required before jury: set JAAS_* (or accept meet.jit.si 5-min limit), PRESENCE_MODE=browser unless JaaS webhook configured, NEXT_PUBLIC_APP_URL=https final URL, run `npm run db:migrate`.
+GitHub push from the cloud session was refused (403, Claude GitHub App lacks access); work delivered as a git bundle.
+
 ## Current architecture and stack
 
 Single Next.js 16.3.6 App Router application, React 19, strict TypeScript, responsive custom CSS, Lucide icons. Node runtime route handlers. PostgreSQL with Prisma 6.19.3. bcryptjs passwords, cryptographic opaque sessions, jose signed QR/Jitsi tokens, qrcode, pdf-lib with fontkit. No Auth.js dependency: a secure-equivalent database session implementation is used.

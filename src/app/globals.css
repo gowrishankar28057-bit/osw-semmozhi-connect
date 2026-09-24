@@ -2158,3 +2158,446 @@ td .actions {
     padding: 22px 17px;
   }
 }
+
+/* In-OSW meeting room, organizer control panel and attendance status. */
+.meeting-page {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.meeting-page > .back-link {
+  margin: 0;
+}
+.meeting-hero {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 18px;
+  padding: 24px 26px;
+  border-radius: 12px;
+  color: #fff;
+  background:
+    linear-gradient(115deg, #0b2a44 0%, #0d1c2a 62%, #3b2a12 100%);
+  border-bottom: 3px solid #b48635;
+}
+.meeting-hero h1 {
+  margin: 0 0 6px;
+  color: #fff;
+  font-size: 26px;
+  line-height: 1.25;
+}
+.meeting-hero p {
+  margin: 0;
+  color: #c9d4e2;
+}
+.meeting-hero .eyebrow {
+  color: #d9ad5c;
+  margin-bottom: 8px;
+}
+.meeting-hero-status {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+.live-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 11px;
+  border-radius: 20px;
+  background: #b12c3d;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1.2px;
+}
+.config-warnings {
+  display: grid;
+  gap: 8px;
+}
+.config-warnings p,
+.config-warning {
+  display: flex;
+  gap: 9px;
+  align-items: flex-start;
+  margin: 0;
+  padding: 11px 14px;
+  border-radius: 8px;
+  background: #fff6e5;
+  border: 1px solid #f0d7a3;
+  color: #7a5314;
+  font-size: 12px;
+  line-height: 1.55;
+}
+.config-warnings svg {
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+.control-panel {
+  margin: 0;
+  border-left: 4px solid #b48635;
+}
+.control-panel .actions {
+  margin-top: 4px;
+}
+.control-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin-bottom: 12px;
+}
+.control-head h2 {
+  margin: 0;
+}
+.control-head .eyebrow {
+  margin-bottom: 6px;
+}
+.control-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.control-stats span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 11px;
+  border-radius: 20px;
+  background: #f1f4f8;
+  color: #43566d;
+  font-size: 12px;
+}
+.control-stats b {
+  color: #0b3455;
+  font-variant-numeric: tabular-nums;
+}
+.meeting-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 18px;
+  align-items: start;
+}
+.meeting-layout.with-side {
+  grid-template-columns: minmax(0, 1fr) 320px;
+}
+.meeting-stage {
+  position: relative;
+  height: clamp(420px, 66vh, 760px);
+  border-radius: 12px;
+  overflow: hidden;
+  background: #0d1824;
+  box-shadow: 0 10px 30px #0d182426;
+}
+.jitsi-shell {
+  position: relative;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+.jitsi-frame {
+  flex: 1;
+  min-height: 0;
+}
+.jitsi-frame.hidden {
+  visibility: hidden;
+}
+.jitsi-frame iframe {
+  border: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+.jitsi-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  background: #0b1520;
+}
+.jitsi-toolbar .error {
+  flex: 1;
+  margin: 0;
+  padding: 8px 10px;
+}
+.jitsi-toolbar .button.secondary {
+  background: #182838;
+  color: #e4ebf3;
+  border-color: #2a3d52;
+}
+.stage-overlay {
+  position: absolute;
+  inset: 0 0 50px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 28px;
+  text-align: center;
+  color: #dfe7f1;
+  background: #0d1824;
+}
+.stage-overlay.static {
+  inset: 0;
+}
+.stage-overlay h2 {
+  margin: 0;
+  color: #fff;
+  font-size: 22px;
+}
+.stage-overlay p {
+  max-width: 460px;
+  margin: 0;
+  color: #b8c6d6;
+  line-height: 1.6;
+}
+.stage-overlay svg {
+  color: #d9ad5c;
+}
+.meeting-side {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+}
+.meeting-side .qr-code {
+  width: 100%;
+}
+.meeting-side .qr-code img {
+  width: 100%;
+  max-width: 260px;
+  height: auto;
+}
+.qr-code .button {
+  margin-top: 12px;
+}
+.attendance-bar {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 1px;
+  overflow: hidden;
+  border-radius: 12px;
+  border: 1px solid #e4e8ef;
+  background: #e4e8ef;
+}
+.status-cell {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 16px;
+  background: #fff;
+  min-width: 0;
+}
+.status-cell small {
+  display: block;
+  color: #718198;
+  font-size: 11px;
+}
+.status-cell b {
+  display: block;
+  color: #0c2039;
+  font-size: 17px;
+  font-variant-numeric: tabular-nums;
+  margin: 2px 0;
+}
+.rec-dot {
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: #aab4c2;
+}
+.status-cell.recording .rec-dot {
+  background: #d23145;
+  box-shadow: 0 0 0 4px #d2314522;
+  animation: osw-rec 1.4s ease-in-out infinite;
+}
+.status-cell.recording b {
+  color: #b12c3d;
+}
+.status-cell.verified b {
+  color: #187e4a;
+}
+@keyframes osw-rec {
+  50% {
+    opacity: 0.35;
+  }
+}
+.verify-callout {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 14px 16px;
+  border-radius: 10px;
+  background: #fff4dc;
+  border: 1px solid #ecc97d;
+  color: #5d410e;
+}
+.verify-callout p {
+  margin: 0;
+  line-height: 1.55;
+}
+.verify-callout svg {
+  flex-shrink: 0;
+  color: #a27426;
+}
+.qr-present {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 24px;
+  text-align: center;
+  background: #fff;
+}
+.qr-present h2 {
+  margin: 0;
+  color: #0c2039;
+}
+.qr-present-code img,
+.qr-present-code .qr-refresh {
+  width: min(72vmin, 620px);
+  height: min(72vmin, 620px);
+}
+.qr-present .countdown {
+  font-size: 44px;
+  color: #0c304e;
+  font-variant-numeric: tabular-nums;
+}
+.qr-present-close {
+  position: absolute;
+  top: 18px;
+  right: 18px;
+}
+.readiness-panel td:last-child {
+  width: 40px;
+  text-align: center;
+}
+.readiness-panel .config-warning {
+  margin-top: 10px;
+}
+.ok-icon {
+  color: #199660;
+}
+.warn-icon {
+  color: #c07a12;
+}
+.verification-status {
+  color: #187e4a;
+  font-weight: 600;
+}
+.toast-stack {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  z-index: 90;
+  display: grid;
+  gap: 10px;
+  width: min(360px, calc(100vw - 36px));
+}
+.toast {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  width: 100%;
+  padding: 14px 14px 14px 16px;
+  text-align: left;
+  background: #0d1c2a;
+  color: #e9eef5;
+  border: 0;
+  border-left: 4px solid #b48635;
+  border-radius: 10px;
+  box-shadow: 0 14px 34px #0d1c2a40;
+  animation: osw-fade-slide-up 260ms ease both;
+}
+.toast strong {
+  display: block;
+  color: #e3b765;
+  font-size: 10px;
+  letter-spacing: 1.6px;
+  margin-bottom: 4px;
+}
+.toast span {
+  display: block;
+  font-size: 13px;
+  line-height: 1.45;
+}
+.toast .toast-close {
+  margin-left: auto;
+  color: #9fb0c3;
+  background: transparent;
+  border: 0;
+  padding: 2px;
+}
+@media (max-width: 1100px) {
+  .meeting-layout.with-side {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .attendance-bar {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+@media (max-width: 680px) {
+  .meeting-hero {
+    flex-direction: column;
+    padding: 20px 18px;
+  }
+  .meeting-hero h1 {
+    font-size: 21px;
+  }
+  .meeting-stage {
+    height: clamp(360px, 72vh, 640px);
+    margin: 0 -4px;
+  }
+  .attendance-bar {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .attendance-bar .status-cell:last-child {
+    grid-column: 1 / -1;
+  }
+  .status-cell {
+    padding: 12px;
+  }
+  .status-cell b {
+    font-size: 15px;
+  }
+  .control-head {
+    align-items: flex-start;
+  }
+  .toast-stack {
+    right: 12px;
+    left: 12px;
+    width: auto;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .status-cell.recording .rec-dot,
+  .toast {
+    animation: none;
+  }
+}
+.toast-body {
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  text-align: left;
+  color: inherit;
+  background: transparent;
+  border: 0;
+}
+.notice-kind {
+  display: block;
+  color: #a27426;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1.4px;
+  margin-bottom: 3px;
+}

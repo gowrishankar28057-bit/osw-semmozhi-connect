@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { api, ErrorBox } from "./common";
@@ -18,8 +18,28 @@ export function WorkshopForm({
   speaker: string;
 }) {
   const router = useRouter(),
+    form = useRef<HTMLFormElement>(null),
     [busy, setBusy] = useState(false),
     [error, setError] = useState("");
+  useEffect(() => {
+    if (w || !form.current) return;
+    // Defaults for a live demo: starts in ~15 minutes, runs one hour, and
+    // registration stays open until the planned end. All remain editable.
+    const start = new Date(
+      Math.ceil((Date.now() + 15 * 60_000) / 300_000) * 300_000,
+    );
+    const end = new Date(start.getTime() + 60 * 60_000);
+    const values: Record<string, Date> = {
+      scheduledStart: start,
+      scheduledEnd: end,
+      registrationDeadline: end,
+    };
+    for (const [name, value] of Object.entries(values)) {
+      const input = form.current.elements.namedItem(name);
+      if (input instanceof HTMLInputElement && !input.value)
+        input.value = localTime(value.toISOString());
+    }
+  }, [w]);
   return (
     <>
       <div className="page-heading">
@@ -29,6 +49,7 @@ export function WorkshopForm({
       </div>
       <section className="panel form-panel">
         <form
+          ref={form}
           onSubmit={async (e) => {
             e.preventDefault();
             const fd = new FormData(e.currentTarget);

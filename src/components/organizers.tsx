@@ -51,16 +51,21 @@ export function OrganizerManager({ compact = false }: { compact?: boolean }) {
               setFormError("");
               setMessage("");
               try {
+                const reset = editing && String(fd.get("password") || "");
                 await api(`organizers${editing ? `/${editing.id}` : ""}`, {
                   name: fd.get("name"),
                   department: fd.get("department"),
                   ...(editing
-                    ? {}
+                    ? reset
+                      ? { password: reset }
+                      : {}
                     : { email: fd.get("email"), password: fd.get("password") }),
                 });
                 setMessage(
                   editing
-                    ? "Organizer updated."
+                    ? reset
+                      ? "Organizer updated. The new temporary password is active and old sessions were signed out."
+                      : "Organizer updated."
                     : "Organizer created. They can sign in immediately.",
                 );
                 setEditing(null);
@@ -107,20 +112,22 @@ export function OrganizerManager({ compact = false }: { compact?: boolean }) {
                   placeholder="Tamil / AI"
                 />
               </label>
-              {!editing && (
-                <label>
-                  Temporary password
-                  <input
-                    name="password"
-                    type="password"
-                    autoComplete="new-password"
-                    minLength={8}
-                    maxLength={72}
-                    required
-                    placeholder="At least 8 characters"
-                  />
-                </label>
-              )}
+              <label>
+                {editing ? "Reset password (optional)" : "Temporary password"}
+                <input
+                  name="password"
+                  type="password"
+                  autoComplete="new-password"
+                  minLength={8}
+                  maxLength={72}
+                  required={!editing}
+                  placeholder={
+                    editing
+                      ? "Leave blank to keep the current password"
+                      : "At least 8 characters"
+                  }
+                />
+              </label>
             </div>
             <ErrorBox message={formError} />
             {message && (

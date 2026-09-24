@@ -33,6 +33,7 @@ export type Notice = {
   id: string;
   message: string;
   href: string;
+  kind: string;
   readAt: string | null;
   createdAt: string;
 };
@@ -70,6 +71,7 @@ export type AttendanceRow = {
   participantId: string;
   status: string;
   meetingJoined: boolean;
+  inMeeting: boolean;
   presenceSeconds: number;
   qrVerified: boolean;
   verifiedAt: string | null;
@@ -87,4 +89,51 @@ export type WindowState = {
   expiresAt: string | null;
   url: string | null;
   serverNow: string;
+};
+export type LiveState = {
+  id: string;
+  title: string;
+  status: string;
+  speaker: string;
+  organizer: string;
+  isOwner: boolean;
+  registered: boolean;
+  session: { startedAt: string; endedAt: string | null } | null;
+  verificationOpen: boolean;
+  serverNow: string;
+  presenceMode: "browser" | "webhook";
+  presenceTracked: boolean;
+  provider: "jaas" | "self-hosted" | "public";
+  me: {
+    recording: boolean;
+    presenceSeconds: number;
+    attendancePercentage: number;
+    qrVerified: boolean;
+    verifiedAt: string | null;
+    eligible: boolean;
+    certificateId: string | null;
+  } | null;
+  summary: { registered: number; inMeeting: number; verified: number } | null;
+  warnings: string[];
+};
+export type MeetingConfig = {
+  provider: string;
+  domain: string;
+  scriptUrl: string;
+  room: string;
+  jwt?: string;
+  displayName: string;
+  moderator: boolean;
+  sessionId: string;
+  presenceMode: "browser" | "webhook";
+};
+export type SystemState = {
+  appUrl: string | null;
+  demoMode: boolean;
+  presenceMode: string;
+  presenceTracked: boolean;
+  jitsi: { provider: string; domain: string };
+  jaasWebhook: boolean;
+  genericWebhook: boolean;
+  warnings: string[];
 };

@@ -4,6 +4,10 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import QRCode from "qrcode";
 import type { Certificate } from "@prisma/client";
+import { appUrl } from "./config";
+import { percent } from "./format";
+export const verificationUrl = (id: string) =>
+  `${appUrl()}/verify-certificate/${id}`;
 export async function certificatePdf(c: Certificate) {
   const pdf = await PDFDocument.create();
   pdf.registerFontkit(fontkit);
@@ -68,7 +72,7 @@ export async function certificatePdf(c: Certificate) {
     });
   line(`Workshop date: ${date(c.workshopDate)}`, 638, 21, 730);
   line(
-    `Verified attendance: ${c.attendancePercentage.toFixed(2)}%`,
+    `Verified attendance: ${percent(c.attendancePercentage)}`,
     670,
     20,
     730,
@@ -76,10 +80,11 @@ export async function certificatePdf(c: Certificate) {
   );
   clear(389, 704, 745, 30);
   line(`${c.certificateNumber}  |  Issued ${date(c.issuedAt)}`, 709, 12, 735);
-  const qr = await QRCode.toBuffer(
-    `${process.env.NEXT_PUBLIC_APP_URL}/certificate/verify/${c.id}`,
-    { width: 240, margin: 2, errorCorrectionLevel: "M" },
-  );
+  const qr = await QRCode.toBuffer(verificationUrl(c.id), {
+    width: 240,
+    margin: 2,
+    errorCorrectionLevel: "M",
+  });
   clear(1173, 716, 128, 151);
   page.drawImage(await pdf.embedPng(qr), {
     x: 1177,

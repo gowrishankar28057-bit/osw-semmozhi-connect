@@ -2,7 +2,13 @@ import assert from "node:assert/strict";
 import { PrismaClient } from "@prisma/client";
 import { randomUUID } from "node:crypto";
 import { mkdir, writeFile } from "node:fs/promises";
-import type { Certificate, WindowState, Attendance } from "../src/lib/types";
+import { SignJWT, decodeJwt } from "jose";
+import type {
+  Certificate,
+  WindowState,
+  Attendance,
+  LiveState,
+} from "../src/lib/types";
 const base = process.env.NEXT_PUBLIC_APP_URL!;
 assert(
   new URL(base).hostname === "localhost" ||
@@ -171,10 +177,22 @@ try {
   );
   await participant.request(`workshops/${w.id}/cancel`, {}, 409);
   await unregistered.request(`workshops/${w.id}/meeting`, undefined, 403);
+  await new Client().request(`workshops/${w.id}/live`, undefined, 401);
+  // Joining late is allowed until the deadline; cancelling after start is not.
+  const walkIn = new Client();
+  await user(walkIn, "walkin");
+  await walkIn.request(`workshops/${w.id}/register`, {});
+  await walkIn.request(`workshops/${w.id}/cancel`, {}, 409);
   await org.request(`workshops/${w.id}/window`, { action: "demo" });
   const qr = await org.request<WindowState>(`workshops/${w.id}/window`);
-  assert(qr.url);
-  const token = new URL(qr.url).searchParams.get("t")!;
+  assert(qr.url?.startsWith(`${base}/attendance/verify?t=`));
+  assertions++;
+  const token = new URL(qr.url!).searchParams.get("t")!;
+  const participantWindow = await participant.request<WindowState>(
+    `workshops/${w.id}/window`,
+  );
+  assert(participantWindow.open && participantWindow.url === null);
+  assertions++;
   const record = await db.attendanceChallenge.findFirstOrThrow({
     where: { session: { workshopId: w.id }, active: true },
   });
@@ -186,25 +204,73 @@ try {
     { token: token.slice(0, -12) + "invalidtoken" },
     400,
   );
+  const forged = await new SignJWT(decodeJwt(token))
+    .setProtectedHeader({ alg: "HS256", typ: "JWT" })
+    .sign(new TextEncoder().encode("x".repeat(64)));
+  await participant.request("attendance/verify", { token: forged }, 400);
+  // Registered but not connected to the meeting: the QR alone is refused.
+  await late.request("attendance/verify", { token }, 409);
   await participant.request("attendance/verify", { token });
   await participant.request("attendance/verify", { token }, 409);
+  // Rotating before expiry must invalidate the previous QR immediately.
+  await org.request(`workshops/${w.id}/window`, { action: "close" });
+  await org.request(`workshops/${w.id}/window`, { action: "open" });
+  const reopened = await org.request<WindowState>(`workshops/${w.id}/window`);
+  const token2 = new URL(reopened.url!).searchParams.get("t")!;
+  assert.notEqual(token, token2);
+  assertions++;
+  const lateConnection = randomUUID();
+  await late.request(`workshops/${w.id}/presence`, {
+    action: "join",
+    connectionId: lateConnection,
+  });
+  await late.request("attendance/verify", { token }, 400);
+  await late.request(`workshops/${w.id}/presence`, {
+    action: "leave",
+    connectionId: lateConnection,
+  });
   console.log(
-    "Roles, ownership, notifications, registration, community and initial QR checks passed. Waiting for the real 120-second expiry while recording heartbeat timestamps.",
+    "Roles, ownership, notifications, registration, community and QR rejection checks passed. Waiting for the real 120-second expiry while recording heartbeat timestamps.",
   );
   await new Promise((r) =>
     setTimeout(
       r,
-      Math.max(0, new Date(qr.expiresAt!).getTime() - Date.now()) + 400,
+      Math.max(0, new Date(reopened.expiresAt!).getTime() - Date.now()) + 400,
     ),
   );
-  await late.request("attendance/verify", { token }, 400);
+  await late.request("attendance/verify", { token: token2 }, 400);
   const rotated = await org.request<WindowState>(`workshops/${w.id}/window`);
-  const token2 = new URL(rotated.url!).searchParams.get("t")!;
-  assert.notEqual(token, token2);
+  const token3 = new URL(rotated.url!).searchParams.get("t")!;
+  assert.notEqual(token2, token3);
   assertions++;
-  await late.request("attendance/verify", { token: token2 });
+  const lateConnection2 = randomUUID();
+  await late.request(`workshops/${w.id}/presence`, {
+    action: "join",
+    connectionId: lateConnection2,
+  });
+  await late.request("attendance/verify", { token: token3 });
+  await late.request(`workshops/${w.id}/presence`, {
+    action: "leave",
+    connectionId: lateConnection2,
+  });
+  await participant.request("attendance/verify", { token: token3 }, 409);
+  const participantLive = await participant.request<LiveState>(
+    `workshops/${w.id}/live`,
+  );
+  assert(
+    participantLive.me?.qrVerified &&
+      participantLive.me.recording &&
+      participantLive.summary === null,
+  );
+  assertions++;
+  const organizerLive = await org.request<LiveState>(`workshops/${w.id}/live`);
+  assert(
+    organizerLive.summary?.verified === 2 &&
+      organizerLive.summary.inMeeting >= 1,
+  );
+  assertions++;
   await org.request(`workshops/${w.id}/window`, { action: "close" });
-  await unregistered.request("attendance/verify", { token: token2 }, 400);
+  await unregistered.request("attendance/verify", { token: token3 }, 403);
   const rows = await org.request<Attendance>(`workshops/${w.id}/attendance`);
   assert(
     rows.rows.some(
@@ -238,6 +304,48 @@ try {
   assert(!("email" in verified) && !("participantId" in verified));
   assertions++;
   await publicClient.request("certificate/not-a-certificate", undefined, 404);
+  const byNumber = await publicClient.request<Certificate>(
+    `certificate/${cert.certificateNumber}`,
+  );
+  assert.equal(byNumber.id, cert.id);
+  assertions++;
+  const page = await fetch(`${base}/verify-certificate/${cert.id}`);
+  const html = await page.text();
+  assert.equal(page.status, 200);
+  assert(
+    html.includes("CERTIFICATE VERIFIED") &&
+      html.includes(cert.participantName),
+  );
+  assert(!html.includes("@example.test"), "No private email on public page");
+  assertions += 3;
+  const missing = await fetch(`${base}/verify-certificate/not-a-certificate`);
+  assert((await missing.text()).includes("CERTIFICATE NOT FOUND"));
+  assertions++;
+  const legacy = await fetch(`${base}/certificate/verify/${cert.id}`, {
+    redirect: "manual",
+  });
+  assert.equal(legacy.status, 308);
+  assert(
+    legacy.headers.get("location")?.endsWith(`/verify-certificate/${cert.id}`),
+  );
+  assertions += 2;
+  const adminPage = await fetch(`${base}/admin`, {
+    headers: { Cookie: participant.cookie },
+    redirect: "manual",
+  });
+  assert([303, 307, 308].includes(adminPage.status));
+  assert.notEqual(
+    new URL(adminPage.headers.get("location")!, base).pathname,
+    "/admin",
+  );
+  assertions += 2;
+  await participant.request("system", undefined, 403);
+  const system = await admin.request<{
+    presenceMode: string;
+    warnings: string[];
+  }>("system");
+  assert(system.presenceMode && Array.isArray(system.warnings));
+  assertions++;
   const pdf = await fetch(`${base}/api/certificate/${cert.id}/pdf?download=1`, {
     headers: { Cookie: participant.cookie },
   });
@@ -253,6 +361,36 @@ try {
     headers: { Cookie: unregistered.cookie },
   });
   assert.equal(forbiddenPdf.status, 403);
+  assertions++;
+  // Admin resets a mistyped organizer password: old sessions are revoked.
+  const newPassword = `Qa${randomUUID()}#`;
+  await admin.request(`organizers/${second.id}`, { password: newPassword });
+  await other.request("dashboard", undefined, 401);
+  await other.request(
+    "auth/login",
+    { email: `${tag}-other@example.test`, password, role: "ORGANIZER" },
+    401,
+  );
+  await other.request("auth/login", {
+    email: `${tag}-other@example.test`,
+    password: newPassword,
+    role: "ORGANIZER",
+  });
+  // A request whose Origin matches its own Host is accepted even when the
+  // configured public URL uses another hostname (e.g. *.vercel.app).
+  const loopback = new URL(base);
+  loopback.hostname =
+    loopback.hostname === "localhost" ? "127.0.0.1" : "localhost";
+  const sameHost = await fetch(`${loopback.origin}/api/auth/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Origin: loopback.origin },
+    body: JSON.stringify({
+      email: d.email,
+      password,
+      role: "ORGANIZER",
+    }),
+  });
+  assert.equal(sameHost.status, 200);
   assertions++;
   await admin.request(`organizers/${organizer.id}`, { enabled: false });
   await org.request("dashboard", undefined, 401);
@@ -288,6 +426,15 @@ try {
       seeded: false,
     },
   });
-  await db.authThrottle.deleteMany({ where: { key: { contains: tag } } });
+  await db.authThrottle.deleteMany({
+    where: {
+      OR: [
+        { key: { contains: tag } },
+        // Local-only suite: reset the loopback IP buckets it consumed.
+        { key: { startsWith: "login-ip:" } },
+        { key: { startsWith: "signup-ip:" } },
+      ],
+    },
+  });
   await db.$disconnect();
 }

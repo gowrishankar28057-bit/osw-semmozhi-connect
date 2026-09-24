@@ -8,6 +8,7 @@ import {
   Plus,
   ArrowRight,
   ShieldCheck,
+  Video,
 } from "lucide-react";
 import { usePoll, Loading, ErrorBox, Empty, date, Status } from "./common";
 import type { Dashboard as Data } from "@/lib/types";
@@ -173,13 +174,23 @@ export function Dashboard() {
                       {next._count.registrations} / {next.capacity}{" "}
                       registrations
                     </p>
-                    <Link
-                      className="button gold"
-                      href={`/workshops/${next.id}`}
-                    >
-                      {org ? "Manage workshop" : "View details"}
-                      <ArrowRight size={16} />
-                    </Link>
+                    {next.status === "ONGOING" ? (
+                      <Link
+                        className="button gold"
+                        href={`/workshop/${next.id}/meeting`}
+                      >
+                        <Video size={17} />
+                        {org ? "Open control panel" : "Join workshop"}
+                      </Link>
+                    ) : (
+                      <Link
+                        className="button gold"
+                        href={`/workshops/${next.id}`}
+                      >
+                        {org ? "Manage workshop" : "View details"}
+                        <ArrowRight size={16} />
+                      </Link>
+                    )}
                   </div>
                 </div>
               ) : (
@@ -249,9 +260,17 @@ export function Dashboard() {
                           <td>
                             <Link
                               className="text-link"
-                              href={`/workshops/${w.id}`}
+                              href={
+                                w.status === "ONGOING"
+                                  ? `/workshop/${w.id}/meeting`
+                                  : `/workshops/${w.id}`
+                              }
                             >
-                              Open
+                              {w.status === "ONGOING"
+                                ? org
+                                  ? "Control panel"
+                                  : "Join"
+                                : "Open"}
                             </Link>
                           </td>
                         </tr>
