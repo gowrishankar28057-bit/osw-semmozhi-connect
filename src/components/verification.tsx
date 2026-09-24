@@ -1,32 +1,42 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { CheckCircle2, ShieldCheck, XCircle } from "lucide-react";
-import { api, Loading, date, usePoll } from "./common";
-import type { Certificate } from "@/lib/types";
+import { CheckCircle2, XCircle } from "lucide-react";
+import { api, Loading } from "./common";
+type Verified = {
+  participant: string;
+  workshop: string;
+  workshopId: string;
+  verifiedAt: string;
+};
+const headings: Record<string, string> = {
+  QR_EXPIRED: "ATTENDANCE CODE EXPIRED",
+  QR_ALREADY_VERIFIED: "ATTENDANCE ALREADY VERIFIED",
+  PRESENCE_REQUIRED: "JOIN THE LIVE MEETING FIRST",
+  VERIFICATION_CLOSED: "VERIFICATION IS CLOSED",
+  QR_INVALID: "INVALID ATTENDANCE CODE",
+};
 export function AttendanceVerification({ token }: { token: string }) {
   const started = useRef(false),
-    [result, setResult] = useState<{
-      participant: string;
-      workshop: string;
-      verifiedAt: string;
-    } | null>(null),
-    [error, setError] = useState("");
+    [result, setResult] = useState<Verified | null>(null),
+    [error, setError] = useState<{ message: string; code?: string } | null>(
+      null,
+    );
   useEffect(() => {
     if (started.current) return;
     started.current = true;
     if (!token) {
-      setError(
-        "No attendance code was supplied. Please scan the organizer’s current QR.",
-      );
+      setError({
+        message:
+          "No attendance code was supplied. Please scan the organizer’s current QR.",
+      });
       return;
     }
-    void api<{ participant: string; workshop: string; verifiedAt: string }>(
-      "attendance/verify",
-      { token },
-    )
+    void api<Verified>("attendance/verify", { token })
       .then(setResult)
-      .catch((e) => setError(e.message));
+      .catch((e: Error & { code?: string }) =>
+        setError({ message: e.message, code: e.code }),
+      );
   }, [token]);
   return (
     <main className="public-page">
@@ -37,99 +47,51 @@ export function AttendanceVerification({ token }: { token: string }) {
         {result ? (
           <>
             <CheckCircle2 className="verified-icon" size={64} />
-            <p className="eyebrow">ATTENDANCE VERIFIED</p>
-            <h1>Thank you, {result.participant}</h1>
-            <p>{result.workshop}</p>
-            <div className="info-note">
-              Verified at {new Date(result.verifiedAt).toLocaleString()}
-            </div>
+            <p className="eyebrow">✓ ATTENDANCE VERIFIED</p>
+            <dl>
+              <div>
+                <dt>Workshop</dt>
+                <dd>{result.workshop}</dd>
+              </div>
+              <div>
+                <dt>Participant</dt>
+                <dd>{result.participant}</dd>
+              </div>
+              <div>
+                <dt>Verification time</dt>
+                <dd>{new Date(result.verifiedAt).toLocaleString("en-IN")}</dd>
+              </div>
+            </dl>
             <p className="subtle">
               Keep attending the meeting. Certificates require at least 90%
-              meeting presence.
+              meeting presence as well as this verification.
             </p>
+            <Link className="button" href={`/workshop/${result.workshopId}/meeting`}>
+              Back to the meeting
+            </Link>
           </>
         ) : error ? (
           <>
             <XCircle size={58} className="error-icon" />
             <h1>
-              {error.toLowerCase().includes("already")
-                ? "Attendance already verified"
-                : error.toLowerCase().includes("expired")
-                  ? "Attendance code expired"
-                  : "Unable to verify attendance"}
+              {headings[error.code ?? ""] ?? "UNABLE TO VERIFY ATTENDANCE"}
             </h1>
-            <p role="alert">{error}</p>
+            <p role="alert">{error.message}</p>
+            {error.code === "QR_EXPIRED" && (
+              <p className="subtle">
+                Please scan the latest QR displayed by the Organizer.
+              </p>
+            )}
+            <Link className="button" href="/participant">
+              Return to dashboard
+            </Link>
           </>
         ) : (
           <>
-            <h1>Verifying attendance</h1>
+            <h1>Verifying attendance…</h1>
             <Loading />
           </>
         )}
-        <Link className="button" href="/participant">
-          Return to dashboard
-        </Link>
-      </section>
-    </main>
-  );
-}
-export function PublicCertificate({ id }: { id: string }) {
-  const { data: c, error } = usePoll<Certificate>(`certificate/${id}`, 60_000);
-  return (
-    <main className="public-page">
-      <div className="public-brand">
-        OSW <span>Semmozhi Connect</span>
-      </div>
-      <section className="verification-card">
-        {error ? (
-          <>
-            <XCircle size={58} className="error-icon" />
-            <h1>
-              {error.toLowerCase().includes("not found")
-                ? "Certificate not found"
-                : "Unable to verify certificate"}
-            </h1>
-            <p>{error}</p>
-          </>
-        ) : !c ? (
-          <Loading />
-        ) : (
-          <>
-            <ShieldCheck size={64} className="verified-icon" />
-            <p className="eyebrow">CERTIFICATE VERIFIED</p>
-            <h1>{c.participantName}</h1>
-            <p className="verification-workshop">{c.workshopTitle}</p>
-            <dl>
-              <div>
-                <dt>Workshop date</dt>
-                <dd>{date(c.workshopDate)}</dd>
-              </div>
-              <div>
-                <dt>Organizer / speaker</dt>
-                <dd>{c.speaker}</dd>
-              </div>
-              <div>
-                <dt>Verified attendance</dt>
-                <dd>{c.attendancePercentage.toFixed(2)}%</dd>
-              </div>
-              <div>
-                <dt>Issued on</dt>
-                <dd>{date(c.issuedAt)}</dd>
-              </div>
-              <div>
-                <dt>Certificate ID</dt>
-                <dd className="certificate-id">{c.certificateNumber}</dd>
-              </div>
-            </dl>
-            <p className="fine">
-              This record confirms the certificate issued by OSW. It does not
-              expose private account details.
-            </p>
-          </>
-        )}
-        <Link className="text-link" href="/">
-          Visit Semmozhi Connect
-        </Link>
       </section>
     </main>
   );

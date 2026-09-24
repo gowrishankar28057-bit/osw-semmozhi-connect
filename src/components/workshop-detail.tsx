@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
+import { useRouter } from "next/navigation";
 import QRCode from "qrcode";
 import {
   CalendarDays,
@@ -10,6 +11,8 @@ import {
   ArrowLeft,
   Clock,
   Download,
+  Maximize2,
+  X,
 } from "lucide-react";
 import {
   api,
@@ -24,7 +27,7 @@ import {
   time,
   duration,
 } from "./common";
-import { Meeting } from "./meeting";
+import { percent } from "@/lib/format";
 import type { User, Workshop, Attendance, WindowState } from "@/lib/types";
 export function AttendanceTable({ attendance: a }: { attendance: Attendance }) {
   return a.rows.length ? (
@@ -46,14 +49,22 @@ export function AttendanceTable({ attendance: a }: { attendance: Attendance }) {
             <tr key={r.participantId}>
               <td>{r.participant}</td>
               <td>{r.status === "CONFIRMED" ? "Confirmed" : "Cancelled"}</td>
-              <td>{r.meetingJoined ? "Yes" : "No"}</td>
+              <td>
+                {r.inMeeting ? (
+                  <Badge tone="green">Live now</Badge>
+                ) : r.meetingJoined ? (
+                  "Yes"
+                ) : (
+                  "No"
+                )}
+              </td>
               <td>{duration(r.presenceSeconds)}</td>
               <td>
                 <Badge tone={r.qrVerified ? "green" : "muted"}>
                   {r.qrVerified ? "Verified" : "Pending"}
                 </Badge>
               </td>
-              <td>{r.attendancePercentage.toFixed(2)}%</td>
+              <td>{percent(r.attendancePercentage)}</td>
               <td>
                 {r.eligible ? (
                   <Badge tone="green">Eligible</Badge>
@@ -85,17 +96,19 @@ export function WorkshopDetail({
   const { data: attendance, refresh: refreshAttendance } = usePoll<Attendance>(
     `workshops/${id}/attendance`,
   );
-  const [meeting, setMeeting] = useState(false),
+  const router = useRouter(),
     [tab, setTab] = useState("overview");
   if (!w) return error ? <ErrorBox message={error} /> : <Loading />;
   const owner = user.role === "ORGANIZER" && w.organizerId === user.id,
     registered = w.registrations?.[0]?.status === "CONFIRMED",
     access = owner || registered || user.role === "ADMIN";
+  const meetingHref = `/workshop/${id}/meeting`;
   const state = async (action: string) => {
     await api(`workshops/${id}/${action}`, {});
+    // Starting opens the organizer's in-OSW meeting control panel.
+    if (action === "start") return router.push(meetingHref);
     await refresh();
     await refreshAttendance();
-    if (action === "end") setMeeting(false);
   };
   return (
     <>
@@ -159,6 +172,13 @@ export function WorkshopDetail({
             </Action>
           )}
           {user.role === "PARTICIPANT" &&
+            w.status === "ONGOING" &&
+            !registered && (
+              <Action className="gold" onClick={() => state("register")}>
+                Register and join
+              </Action>
+            )}
+          {user.role === "PARTICIPANT" &&
             w.status === "PUBLISHED" &&
             (registered ? (
               <>
@@ -176,21 +196,21 @@ export function WorkshopDetail({
                 Register
               </Action>
             ))}
-          {(owner || registered) && w.status === "ONGOING" && !meeting && (
-            <button className="button" onClick={() => setMeeting(true)}>
+          {(owner || registered) && ["PUBLISHED", "ONGOING"].includes(w.status) && (
+            <Link
+              className={`button ${w.status === "ONGOING" ? "" : "secondary"}`}
+              href={meetingHref}
+            >
               <Video size={18} />
-              {owner ? "Open online meeting" : "Join workshop"}
-            </button>
+              {owner
+                ? "Open control panel"
+                : w.status === "ONGOING"
+                  ? "Join workshop"
+                  : "Open meeting room"}
+            </Link>
           )}
         </div>
       </div>
-      {meeting && w.status === "ONGOING" && (
-        <Meeting
-          workshopId={id}
-          participant={user.role === "PARTICIPANT"}
-          onClose={() => setMeeting(false)}
-        />
-      )}
       <div className="tabs">
         {[
           "overview",
@@ -253,11 +273,7 @@ export function WorkshopDetail({
                     ? "Final attendance"
                     : "Attendance so far"}
                 </span>
-                <b>
-                  {attendance.rows[0]?.attendancePercentage.toFixed(2) ??
-                    "0.00"}
-                  %
-                </b>
+                <b>{percent(attendance.rows[0]?.attendancePercentage ?? 0)}</b>
               </div>
             )}
           </section>
@@ -349,6 +365,101 @@ export function downloadAttendance(title: string, a: Attendance) {
   link.click();
   setTimeout(() => URL.revokeObjectURL(link.href), 1000);
 }
+/** The organizer's rotating attendance QR with a server-synchronised countdown. */
+export function QrDisplay({
+  state: w,
+  title,
+}: {
+  state: WindowState;
+  title?: string;
+}) {
+  const [image, setImage] = useState(""),
+    [seconds, setSeconds] = useState(0),
+    [presenting, setPresenting] = useState(false);
+  useEffect(() => {
+    if (w.url)
+      void QRCode.toDataURL(w.url, {
+        width: 720,
+        margin: 2,
+        errorCorrectionLevel: "M",
+      }).then(setImage);
+    else setImage("");
+  }, [w.url]);
+  useEffect(() => {
+    if (!w.expiresAt) return;
+    const offset = new Date(w.serverNow).getTime() - Date.now();
+    const update = () =>
+      setSeconds(
+        Math.max(
+          0,
+          Math.ceil(
+            (new Date(w.expiresAt!).getTime() - Date.now() - offset) / 1000,
+          ),
+        ),
+      );
+    update();
+    const t = setInterval(update, 250);
+    return () => clearInterval(t);
+  }, [w]);
+  useEffect(() => {
+    if (!presenting) return;
+    const close = (e: KeyboardEvent) => e.key === "Escape" && setPresenting(false);
+    window.addEventListener("keydown", close);
+    return () => window.removeEventListener("keydown", close);
+  }, [presenting]);
+  const countdown = `${String(Math.floor(seconds / 60)).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`;
+  const code =
+    image && seconds > 0 ? (
+      <Image
+        src={image}
+        alt="Current attendance verification QR"
+        width={260}
+        height={260}
+        unoptimized
+      />
+    ) : (
+      <div className="qr-refresh">Rotating attendance code…</div>
+    );
+  return (
+    <>
+      <div className="qr-code">
+        {code}
+        <span>Expires in</span>
+        <strong className="countdown">{countdown}</strong>
+        <small>A new secure code appears every 120 seconds.</small>
+        <button
+          type="button"
+          className="button secondary small"
+          onClick={() => setPresenting(true)}
+        >
+          <Maximize2 size={15} />
+          Present full screen
+        </button>
+      </div>
+      {presenting && (
+        <div
+          className="qr-present"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Attendance verification QR"
+        >
+          <button
+            className="icon-button qr-present-close"
+            aria-label="Close full-screen QR"
+            onClick={() => setPresenting(false)}
+          >
+            <X size={28} />
+          </button>
+          <p className="eyebrow">ATTENDANCE VERIFICATION</p>
+          {title && <h2>{title}</h2>}
+          <div className="qr-present-code">{code}</div>
+          <p>Scan with your phone while you are in the live meeting.</p>
+          <strong className="countdown">{countdown}</strong>
+        </div>
+      )}
+    </>
+  );
+}
 function AttendanceWindow({
   id,
   owner,
@@ -365,33 +476,6 @@ function AttendanceWindow({
     error,
     refresh,
   } = usePoll<WindowState>(`workshops/${id}/window`);
-  const [image, setImage] = useState(""),
-    [seconds, setSeconds] = useState(0);
-  useEffect(() => {
-    if (w?.url)
-      void QRCode.toDataURL(w.url, {
-        width: 360,
-        margin: 2,
-        errorCorrectionLevel: "M",
-      }).then(setImage);
-    else setImage("");
-  }, [w?.url]);
-  useEffect(() => {
-    if (!w?.expiresAt) return;
-    const offset = new Date(w.serverNow).getTime() - Date.now();
-    const update = () =>
-      setSeconds(
-        Math.max(
-          0,
-          Math.ceil(
-            (new Date(w.expiresAt!).getTime() - Date.now() - offset) / 1000,
-          ),
-        ),
-      );
-    update();
-    const t = setInterval(update, 250);
-    return () => clearInterval(t);
-  }, [w]);
   return (
     <section className="panel qr-panel">
       <div>
@@ -401,7 +485,7 @@ function AttendanceWindow({
           {!active
             ? "Attendance verification is available only while the workshop is ongoing."
             : w?.open
-              ? "Scan the current QR code with your phone. Sign in with the same participant account you used to join."
+              ? "Scan the current QR code with your phone while you are connected to the live meeting."
               : "Verification opens automatically near the middle of the planned session."}
         </p>
         <ErrorBox message={error} />
@@ -438,27 +522,7 @@ function AttendanceWindow({
           </div>
         )}
       </div>
-      {owner && w?.open && (
-        <div className="qr-code">
-          {image && seconds > 0 ? (
-            <Image
-              src={image}
-              alt="Current attendance verification QR"
-              width={260}
-              height={260}
-              unoptimized
-            />
-          ) : (
-            <div className="qr-refresh">Rotating attendance code…</div>
-          )}
-          <span>Expires in</span>
-          <strong className="countdown">
-            {String(Math.floor(seconds / 60)).padStart(2, "0")}:
-            {String(seconds % 60).padStart(2, "0")}
-          </strong>
-          <small>A new secure code appears every 120 seconds.</small>
-        </div>
-      )}
+      {owner && w?.open && <QrDisplay state={w} />}
     </section>
   );
 }

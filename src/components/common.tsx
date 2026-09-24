@@ -22,7 +22,16 @@ export async function api<T>(
     signal: AbortSignal.timeout(20_000),
     keepalive: options?.keepalive,
   });
-  const result = await res.json();
+  let result;
+  try {
+    result = await res.json();
+  } catch {
+    // e.g. a hosting error page instead of the API's JSON.
+    throw Object.assign(
+      new Error(`The server is unavailable (HTTP ${res.status}). Please retry.`),
+      { status: res.status },
+    );
+  }
   if (!res.ok)
     throw Object.assign(new Error(result.error || "Request failed."), {
       code: result.code,

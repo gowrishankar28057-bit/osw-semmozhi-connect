@@ -1,7 +1,13 @@
 "use client";
 import Link from "next/link";
 import { useState } from "react";
-import { Award, Download, ExternalLink } from "lucide-react";
+import {
+  Award,
+  CheckCircle2,
+  CircleAlert,
+  Download,
+  ExternalLink,
+} from "lucide-react";
 import {
   api,
   usePoll,
@@ -19,7 +25,9 @@ import type {
   Dashboard,
   Workshop,
   Attendance,
+  SystemState,
 } from "@/lib/types";
+import { percent } from "@/lib/format";
 import { AttendanceTable, downloadAttendance } from "./workshop-detail";
 export function Notifications() {
   const { data, error, refresh } = usePoll<Notice[]>("notifications");
@@ -108,7 +116,7 @@ export function Certificates() {
               <p>{c.participantName}</p>
               <p className="subtle">
                 {date(c.workshopDate)} · Attendance{" "}
-                {c.attendancePercentage.toFixed(2)}%
+                {percent(c.attendancePercentage)}
               </p>
               <div className="actions">
                 <Link className="button gold" href={`/certificates/${c.id}`}>
@@ -123,7 +131,7 @@ export function Certificates() {
                 </a>
                 <Link
                   className="text-link"
-                  href={`/certificate/verify/${c.id}`}
+                  href={`/verify-certificate/${c.id}`}
                 >
                   Verify <ExternalLink size={15} />
                 </Link>
@@ -172,7 +180,7 @@ export function CertificateView({ id }: { id: string }) {
             </a>
             <Link
               className="button secondary"
-              href={`/certificate/verify/${id}`}
+              href={`/verify-certificate/${id}`}
             >
               Verify certificate
             </Link>
@@ -276,6 +284,7 @@ export function Reports() {
         <p>Recorded actions across your workshop platform.</p>
       </div>
       <ErrorBox message={error} />
+      <Readiness />
       {d && (
         <>
           <section className="panel">
@@ -419,5 +428,72 @@ function AttendanceResource({ id }: { id: string }) {
         <Loading />
       )}
     </>
+  );
+}
+/** Admin-only view of the settings the live demo depends on. */
+export function Readiness() {
+  const { data: s, error } = usePoll<SystemState>("system", 30_000);
+  if (!s) return <ErrorBox message={error} />;
+  const rows: [string, string, boolean][] = [
+    [
+      "Public URL (QR and certificate links)",
+      s.appUrl ?? "Not configured",
+      Boolean(s.appUrl?.startsWith("https://")),
+    ],
+    [
+      "Meeting provider",
+      `${s.jitsi.provider} · ${s.jitsi.domain}`,
+      s.jitsi.provider !== "public",
+    ],
+    [
+      "Attendance presence source",
+      s.presenceMode === "webhook"
+        ? "Trusted provider webhooks"
+        : "Browser events (supervised demo)",
+      s.presenceTracked,
+    ],
+    [
+      "JaaS webhook",
+      s.jaasWebhook ? "Configured" : "Not configured",
+      s.jaasWebhook,
+    ],
+    ["Demo mode", s.demoMode ? "On (reset available)" : "Off", true],
+  ];
+  return (
+    <section className="panel readiness-panel">
+      <h2>Deployment readiness</h2>
+      <div className="table-scroll">
+        <table>
+          <tbody>
+            {rows.map(([label, value, good]) => (
+              <tr key={label}>
+                <td>{label}</td>
+                <td>{value}</td>
+                <td>
+                  {good ? (
+                    <CheckCircle2
+                      size={18}
+                      className="ok-icon"
+                      aria-label="OK"
+                    />
+                  ) : (
+                    <CircleAlert
+                      size={18}
+                      className="warn-icon"
+                      aria-label="Check"
+                    />
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {s.warnings.map((w) => (
+        <p className="config-warning" key={w}>
+          {w}
+        </p>
+      ))}
+    </section>
   );
 }
