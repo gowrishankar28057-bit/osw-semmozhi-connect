@@ -1,8 +1,15 @@
 import { SignJWT } from "jose";
-import { transaction, member } from "./workshops";
+import { transaction, member, type Tx } from "./workshops";
 import { AppError, assert } from "./errors";
-import { type Actor } from "./auth";
+import { publicUser, type Actor } from "./auth";
 import { db } from "./db";
+import { jitsiProvider, presenceMode } from "./config";
+import { jaasConfig, jaasToken, parseJaasPresence } from "./jaas";
+import {
+  HEARTBEAT_GRACE_MS,
+  isActiveSegment,
+  STALE_AFTER_MS,
+} from "./attendance-math";
 export async function meetingConfig(id: string, actor: Actor) {
   const w = await db.workshop.findUnique({
     where: { id },
@@ -19,34 +26,90 @@ export async function meetingConfig(id: string, actor: Actor) {
     w.status === "ONGOING" && w.session,
     409,
     "The meeting is not active.",
+    "MEETING_NOT_ACTIVE",
   );
+  const moderator = w.organizerId === actor.id;
+  const provider = jitsiProvider();
+  let roomName = w.meetingRoom;
   let jwt: string | undefined;
-  if (process.env.JITSI_APP_SECRET && process.env.JITSI_APP_ID)
-    jwt = await new SignJWT({
-      context: {
-        user: {
-          id: actor.id,
-          name: actor.name,
-          moderator: w.organizerId === actor.id,
-        },
-      },
+  const jaas = provider.provider === "jaas" ? jaasConfig() : null;
+  if (jaas) {
+    roomName = `${jaas.appId}/${w.meetingRoom}`;
+    jwt = await jaasToken(jaas, {
       room: w.meetingRoom,
-      sub: process.env.JITSI_DOMAIN,
+      userId: actor.id,
+      name: actor.name,
+      moderator,
+    });
+  } else if (provider.provider === "self-hosted")
+    jwt = await new SignJWT({
+      context: { user: { id: actor.id, name: actor.name, moderator } },
+      room: w.meetingRoom,
+      sub: provider.domain,
     })
       .setProtectedHeader({ alg: "HS256" })
-      .setIssuer(process.env.JITSI_APP_ID)
+      .setIssuer(process.env.JITSI_APP_ID!)
       .setAudience("jitsi")
       .setIssuedAt()
       .setExpirationTime("2h")
       .sign(new TextEncoder().encode(process.env.JITSI_APP_SECRET));
   return {
-    room: w.meetingRoom,
-    domain: process.env.JITSI_DOMAIN || "meet.jit.si",
+    provider: provider.provider,
+    domain: provider.domain,
+    scriptUrl: provider.scriptUrl,
+    room: roomName,
     jwt,
     displayName: actor.name,
+    moderator,
     sessionId: w.session.id,
-    presenceMode: process.env.PRESENCE_MODE || "webhook",
+    presenceMode: presenceMode(),
   };
+}
+/** Does the server currently see this participant connected to the meeting? */
+export async function hasActivePresence(
+  client: Tx,
+  sessionId: string,
+  participantId: string,
+  now = new Date(),
+) {
+  const open = await client.meetingPresence.findMany({
+    where: { sessionId, participantId, leftAt: null },
+  });
+  return open.some((s) => isActiveSegment(s, now));
+}
+/**
+ * Applies a signed JaaS PARTICIPANT_JOINED/LEFT webhook as trusted presence.
+ * Events that cannot apply (organizer, unknown room/user, workshop not live)
+ * are acknowledged and ignored so the provider does not retry forever.
+ */
+export async function recordJaasEvent(event: unknown) {
+  const appId = process.env.JAAS_APP_ID?.trim();
+  assert(appId, 503, "JaaS is not configured.");
+  const e = parseJaasPresence(event, appId);
+  if (!e) return { ignored: true };
+  const [w, user] = await Promise.all([
+    db.workshop.findUnique({
+      where: { meetingRoom: e.room },
+      select: { id: true },
+    }),
+    db.user.findUnique({ where: { id: e.userId }, select: publicUser }),
+  ]);
+  if (!w || !user?.enabled || user.role !== "PARTICIPANT")
+    return { ignored: true };
+  try {
+    return await recordPresence(
+      w.id,
+      user,
+      e.action,
+      e.connectionId,
+      "webhook",
+      e.eventId,
+    );
+  } catch (error) {
+    if (error instanceof AppError && error.status < 500)
+      return { ignored: true, reason: error.code };
+    throw error;
+  }
 }
 export async function recordPresence(
   id: string,
@@ -57,7 +120,7 @@ export async function recordPresence(
   eventId?: string,
 ) {
   assert(actor.role === "PARTICIPANT", 403, "Participant attendance only.");
-  if (source === "browser" && process.env.PRESENCE_MODE !== "browser")
+  if (source === "browser" && presenceMode() !== "browser")
     return { success: true, trackedBy: "server" };
   const result = await transaction(id, async (tx, w) => {
     // Serialize deduplication with the presence write. A failed transaction
@@ -101,13 +164,13 @@ export async function recordPresence(
       if (
         current &&
         (source === "webhook" ||
-          now.getTime() - current.lastSeenAt.getTime() < 30_000)
+          now.getTime() - current.lastSeenAt.getTime() < STALE_AFTER_MS)
       )
         return finish();
       if (current) {
         await tx.meetingPresence.update({
           where: { id: current.id },
-          data: { leftAt: new Date(current.lastSeenAt.getTime() + 15_000) },
+          data: { leftAt: new Date(current.lastSeenAt.getTime() + HEARTBEAT_GRACE_MS) },
         });
         return { success: false, expired: true };
       }
@@ -124,11 +187,11 @@ export async function recordPresence(
     } else if (current) {
       if (
         source === "browser" &&
-        now.getTime() - current.lastSeenAt.getTime() > 30_000
+        now.getTime() - current.lastSeenAt.getTime() > STALE_AFTER_MS
       ) {
         await tx.meetingPresence.update({
           where: { id: current.id },
-          data: { leftAt: new Date(current.lastSeenAt.getTime() + 15_000) },
+          data: { leftAt: new Date(current.lastSeenAt.getTime() + HEARTBEAT_GRACE_MS) },
         });
         if (action === "heartbeat") return { success: false, expired: true };
       } else

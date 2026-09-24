@@ -4,6 +4,7 @@ import { compare, hash } from "bcryptjs";
 import type { Role } from "@prisma/client";
 import { db } from "./db";
 import { assert } from "./errors";
+import { appUrl, isAllowedOrigin } from "./config";
 
 export function secret(name: string) {
   const value = process.env[name];
@@ -47,35 +48,69 @@ export async function requireUser(role?: Role) {
   return user;
 }
 export function checkOrigin(req: Request) {
-  const origin = req.headers.get("origin");
-  const expected = process.env.NEXT_PUBLIC_APP_URL;
-  assert(expected, 503, "Application URL is not configured.");
+  let configured: string | null = null;
+  try {
+    configured = appUrl();
+  } catch {
+    // Same-host requests remain valid before the public URL is configured.
+  }
   assert(
-    origin === new URL(expected).origin,
+    isAllowedOrigin(
+      req.headers.get("origin"),
+      req.headers.get("x-forwarded-host")?.split(",")[0] ||
+        req.headers.get("host"),
+      configured,
+      process.env.ALLOWED_ORIGINS,
+    ),
     403,
     "Request origin is not allowed.",
   );
 }
-export async function throttle(key: string) {
+const WINDOW_MS = 15 * 60_000;
+export async function throttle(key: string, limit = 20) {
   const now = new Date();
   const record = await db.authThrottle.upsert({
     where: { key },
     create: { key, attempts: 1, windowStart: now },
     update: { attempts: { increment: 1 } },
   });
-  if (now.getTime() - record.windowStart.getTime() > 15 * 60_000)
+  if (now.getTime() - record.windowStart.getTime() > WINDOW_MS)
     await db.authThrottle.update({
       where: { key },
       data: { attempts: 1, windowStart: now },
     });
   else
     assert(
-      record.attempts <= 20,
+      record.attempts <= limit,
       429,
       "Too many attempts. Please try again in 15 minutes.",
     );
 }
-export async function signIn(email: string, password: string, role?: Role) {
+export const clearThrottle = (key: string) =>
+  db.authThrottle.deleteMany({ where: { key } });
+/**
+ * Client IP for the per-IP bucket. Vercel overwrites these headers; elsewhere
+ * a spoofed value only weakens the IP bucket, never the per-account bucket.
+ */
+export function clientIp(req: Request) {
+  const real = req.headers.get("x-real-ip")?.trim();
+  if (real) return real;
+  const forwarded = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim();
+  return forwarded || "unknown";
+}
+export function isHttps(req: Request) {
+  const proto = req.headers.get("x-forwarded-proto")?.split(",")[0]?.trim();
+  return (proto || new URL(req.url).protocol.replace(":", "")) === "https";
+}
+export async function signIn(
+  email: string,
+  password: string,
+  role: Role | undefined,
+  context: { ip: string; secure: boolean },
+) {
+  // The IP bucket stops password spraying across many accounts; the account
+  // bucket stops targeted guessing. Only failures accumulate on the account.
+  await throttle(`login-ip:${context.ip}`, 100);
   await throttle(`login:${email}`);
   const user = await db.user.findUnique({ where: { email } });
   const valid = await compare(
@@ -88,16 +123,19 @@ export async function signIn(email: string, password: string, role?: Role) {
     401,
     "Email, password or selected role is incorrect, or this account is disabled.",
   );
+  await clearThrottle(`login:${email}`);
+  const now = new Date();
+  await db.authSession.deleteMany({
+    where: { userId: user.id, expiresAt: { lt: now } },
+  });
   const token = randomBytes(32).toString("base64url");
-  const expiresAt = new Date(Date.now() + 12 * 60 * 60_000);
+  const expiresAt = new Date(now.getTime() + 12 * 60 * 60_000);
   await db.authSession.create({
     data: { userId: user.id, tokenHash: tokenHash(token), expiresAt },
   });
-  const secure =
-    new URL(process.env.NEXT_PUBLIC_APP_URL!).protocol === "https:";
   (await cookies()).set("osw-session", token, {
     httpOnly: true,
-    secure,
+    secure: context.secure,
     sameSite: "lax",
     path: "/",
     expires: expiresAt,

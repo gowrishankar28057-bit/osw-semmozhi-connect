@@ -12,6 +12,8 @@ import {
   hashPassword,
   publicUser,
   throttle,
+  clientIp,
+  isHttps,
   type Actor,
 } from "@/lib/auth";
 import { AppError, assert } from "@/lib/errors";
@@ -34,10 +36,23 @@ import {
   publicOrganizer,
   attendanceRows,
   notifyRegistered,
+  housekeeping,
 } from "@/lib/workshops";
 import { attendanceWindow, verifyAttendance } from "@/lib/qr";
-import { meetingConfig, recordPresence } from "@/lib/presence";
+import { meetingConfig, recordJaasEvent, recordPresence } from "@/lib/presence";
 import { certificatePdf } from "@/lib/certificate";
+import { findCertificate, publicCertificate } from "@/lib/certificate-records";
+import { liveState } from "@/lib/live";
+import { sameSecret, verifyJaasSignature } from "@/lib/jaas";
+import {
+  appUrl,
+  configurationWarnings,
+  genericWebhookConfigured,
+  jaasWebhookConfigured,
+  jitsiProvider,
+  presenceMode,
+  presenceTracked,
+} from "@/lib/config";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 type Context = { params: Promise<{ path: string[] }> };
@@ -63,15 +78,23 @@ async function dispatch(req: Request, ctx: Context) {
   const [root, id, action] = p;
   const post = req.method === "POST";
   const url = new URL(req.url);
-  if (post && root !== "jitsi-webhook") checkOrigin(req);
+  // Signed provider webhooks carry no cookies and are authenticated by HMAC.
+  if (post && root !== "jitsi-webhook" && root !== "jaas-webhook")
+    checkOrigin(req);
   if (root === "auth") {
     if (!post && id === "me")
       return ok({ user: await currentUser(), demoMode: isDemo() });
     if (post && id === "login") {
       const data = credentials.parse(await body(req));
-      return ok(await signIn(data.email, data.password, data.role));
+      return ok(
+        await signIn(data.email, data.password, data.role, {
+          ip: clientIp(req),
+          secure: isHttps(req),
+        }),
+      );
     }
     if (post && id === "register") {
+      await throttle(`signup-ip:${clientIp(req)}`, 50);
       const data = account.parse(await body(req));
       await throttle(`signup:${data.email}`);
       await db.user.create({
@@ -83,7 +106,13 @@ async function dispatch(req: Request, ctx: Context) {
           role: "PARTICIPANT",
         },
       });
-      return ok(await signIn(data.email, data.password, "PARTICIPANT"), 201);
+      return ok(
+        await signIn(data.email, data.password, "PARTICIPANT", {
+          ip: clientIp(req),
+          secure: isHttps(req),
+        }),
+        201,
+      );
     }
     if (post && id === "logout") {
       await signOut();
@@ -91,7 +120,7 @@ async function dispatch(req: Request, ctx: Context) {
     }
   }
   if (root === "certificate" && id && !post) {
-    const c = await db.certificate.findUnique({ where: { id } });
+    const c = await findCertificate(id);
     assert(c, 404, "Certificate not found.", "CERTIFICATE_NOT_FOUND");
     if (action === "pdf") {
       const user = await requireUser();
@@ -114,16 +143,30 @@ async function dispatch(req: Request, ctx: Context) {
         },
       });
     }
-    return ok({
-      id: c.id,
-      certificateNumber: c.certificateNumber,
-      participantName: c.participantName,
-      workshopTitle: c.workshopTitle,
-      workshopDate: c.workshopDate,
-      attendancePercentage: c.attendancePercentage,
-      issuedAt: c.issuedAt,
-      speaker: c.speaker,
-    });
+    return ok(publicCertificate(c));
+  }
+  if (root === "jaas-webhook" && post) {
+    const secret = process.env.JAAS_WEBHOOK_SECRET;
+    assert(
+      secret && jaasWebhookConfigured(),
+      503,
+      "JaaS webhook is not configured.",
+    );
+    const raw = await req.text();
+    assert(raw.length < 20_000, 413, "Request too large.");
+    const authorization = process.env.JAAS_WEBHOOK_AUTHORIZATION;
+    assert(
+      !authorization ||
+        sameSecret(req.headers.get("authorization"), authorization),
+      401,
+      "Invalid webhook authorization.",
+    );
+    assert(
+      verifyJaasSignature(req.headers.get("x-jaas-signature"), raw, secret),
+      401,
+      "Invalid webhook signature.",
+    );
+    return ok(await recordJaasEvent(parseJson(raw)));
   }
   if (root === "jitsi-webhook" && post) {
     const secret = process.env.JITSI_WEBHOOK_SECRET;
@@ -178,6 +221,25 @@ async function dispatch(req: Request, ctx: Context) {
   }
   const actor = await requireUser();
   if (root === "dashboard" && !post) return ok(await dashboard(actor));
+  if (root === "system" && !post) {
+    assert(actor.role === "ADMIN", 403, "Admin access required.");
+    let url: string | null = null;
+    try {
+      url = appUrl();
+    } catch {
+      url = null;
+    }
+    return ok({
+      appUrl: url,
+      demoMode: isDemo(),
+      presenceMode: presenceMode(),
+      presenceTracked: presenceTracked(),
+      jitsi: jitsiProvider(),
+      jaasWebhook: jaasWebhookConfigured(),
+      genericWebhook: genericWebhookConfigured(),
+      warnings: configurationWarnings(),
+    });
+  }
   if (root === "notifications") {
     if (!post)
       return ok(
@@ -232,25 +294,34 @@ async function dispatch(req: Request, ctx: Context) {
       });
       return ok(user, 201);
     }
-    const d = z
+    const { password, ...d } = z
       .object({
         name: z.string().trim().min(2).max(100).optional(),
         department: z.string().max(120).optional(),
         enabled: z.boolean().optional(),
+        password: z.string().min(8).max(72).optional(),
       })
       .parse(await body(req));
     const target = await db.user.findUnique({ where: { id } });
     assert(target?.role === "ORGANIZER", 404, "Organizer not found.");
+    const passwordHash = password ? await hashPassword(password) : undefined;
     return ok(
       await db.$transaction(async (tx) => {
         const u = await tx.user.update({
           where: { id },
-          data: d,
+          data: { ...d, ...(passwordHash ? { passwordHash } : {}) },
           select: publicUser,
         });
-        if (d.enabled === false)
+        // Disabling or resetting a password revokes every existing session.
+        if (d.enabled === false || passwordHash)
           await tx.authSession.deleteMany({ where: { userId: id } });
-        await audit(tx, actor.id, "Organizer updated", u.name, target.demo);
+        await audit(
+          tx,
+          actor.id,
+          passwordHash ? "Organizer password reset" : "Organizer updated",
+          u.name,
+          target.demo,
+        );
         return u;
       }),
     );
@@ -334,9 +405,19 @@ async function dispatch(req: Request, ctx: Context) {
         403,
         "This workshop is not published.",
       );
-      const { meetingRoom: _room, ...safe } = w;
+      // The room name and challenge state are only for gated endpoints.
+      const { meetingRoom: _room, session, ...safe } = w;
       void _room;
-      return ok(safe);
+      return ok({
+        ...safe,
+        session: session && {
+          id: session.id,
+          actualStartedAt: session.actualStartedAt,
+          actualEndedAt: session.actualEndedAt,
+          attendanceVerificationOpenedAt: session.attendanceVerificationOpenedAt,
+          attendanceVerificationClosedAt: session.attendanceVerificationClosedAt,
+        },
+      });
     }
     if (id && post && !action) {
       const d = workshopInput.parse(await body(req));
@@ -360,10 +441,16 @@ async function dispatch(req: Request, ctx: Context) {
         }),
       );
     }
-    if (post && ["publish", "start", "end"].includes(action))
-      return ok(
-        await changeState(id, actor, action as "publish" | "start" | "end"),
+    if (post && ["publish", "start", "end"].includes(action)) {
+      const result = await changeState(
+        id,
+        actor,
+        action as "publish" | "start" | "end",
       );
+      if (action === "end") await housekeeping();
+      return ok(result);
+    }
+    if (action === "live" && !post) return ok(await liveState(id, actor));
     if (post && action === "register") return ok(await register(id, actor));
     if (post && action === "cancel") return ok(await register(id, actor, true));
     if (action === "attendance" && !post)
@@ -435,7 +522,7 @@ async function dispatch(req: Request, ctx: Context) {
           const a = await tx.announcement.create({
             data: { workshopId: id, ...d },
           });
-          await notifyRegistered(tx, w, d.message);
+          await notifyRegistered(tx, w, d.message, "ANNOUNCEMENT");
           return a;
         }),
       );
@@ -479,15 +566,34 @@ async function dispatch(req: Request, ctx: Context) {
       .parse(await body(req));
     void d;
     await db.$transaction(async (tx) => {
+      const workshops = await tx.workshop.findMany({
+        where: { demo: true },
+        select: { id: true },
+      });
       await tx.workshop.deleteMany({ where: { demo: true } });
       await tx.notification.deleteMany({ where: { demo: true } });
       await tx.auditLog.deleteMany({ where: { demo: true } });
-      await tx.user.deleteMany({
+      const organizers = await tx.user.findMany({
         where: {
           demo: true,
           seeded: false,
           role: "ORGANIZER",
           workshops: { none: {} },
+        },
+        select: { id: true, email: true },
+      });
+      await tx.user.deleteMany({
+        where: { id: { in: organizers.map((o) => o.id) } },
+      });
+      // Login counters and webhook receipts of removed demo records.
+      await tx.authThrottle.deleteMany({
+        where: {
+          OR: [
+            { key: { in: organizers.map((o) => `login:${o.email}`) } },
+            ...workshops.map((w) => ({
+              key: { startsWith: `webhook:${w.id}:` },
+            })),
+          ],
         },
       });
       await audit(
