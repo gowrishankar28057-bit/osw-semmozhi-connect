@@ -267,7 +267,12 @@ export function WorkshopDetail({
         (tab === "attendance" ||
           (w.status === "ONGOING" && tab === "overview")) && (
           <>
-            <AttendanceWindow id={id} owner={owner} demoMode={demoMode} />
+            <AttendanceWindow
+              id={id}
+              owner={owner}
+              demoMode={demoMode}
+              active={w.status === "ONGOING"}
+            />
             <section className="panel">
               <div className="panel-heading">
                 <h2>
@@ -348,10 +353,12 @@ function AttendanceWindow({
   id,
   owner,
   demoMode,
+  active,
 }: {
   id: string;
   owner: boolean;
   demoMode: boolean;
+  active: boolean;
 }) {
   const {
     data: w,
@@ -391,12 +398,14 @@ function AttendanceWindow({
         <p className="eyebrow">LIVE ATTENDANCE</p>
         <h2>Attendance verification</h2>
         <p>
-          {w?.open
-            ? "Scan the current QR code with your phone. Sign in with the same participant account you used to join."
-            : "Verification opens automatically near the middle of the planned session."}
+          {!active
+            ? "Attendance verification is available only while the workshop is ongoing."
+            : w?.open
+              ? "Scan the current QR code with your phone. Sign in with the same participant account you used to join."
+              : "Verification opens automatically near the middle of the planned session."}
         </p>
         <ErrorBox message={error} />
-        {owner && (
+        {owner && active && (
           <div className="actions">
             <Action
               className={w?.open ? "secondary" : "gold"}

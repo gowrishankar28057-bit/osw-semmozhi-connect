@@ -37,7 +37,7 @@ npm run lint
 npm run build
 ```
 
-Test commands are defined in package.json. The current checkpoint includes seven attendance-math unit tests and a local API integration workflow with 81 assertions. `npm test`, `npm run typecheck`, `npm run lint`, and `npm run build` pass. The frontend includes route entrance motion, staggered panels/cards, hover/press feedback and a `prefers-reduced-motion` fallback.
+Test commands are defined in package.json. Run `npm test` for 12 attendance/lifecycle unit tests. With the local database running, `npm run test:presence` checks concurrent callbacks, reconnect races and real stale expiry. With the app also running at NEXT_PUBLIC_APP_URL, `npm run test:integration` runs the full API workflow (81 assertions including a real 120-second QR rotation). These test commands are local-only and clean up their own fixtures. The frontend includes route entrance motion, staggered panels/cards, hover/press feedback and a `prefers-reduced-motion` fallback.
 
 ## Deployment target
 

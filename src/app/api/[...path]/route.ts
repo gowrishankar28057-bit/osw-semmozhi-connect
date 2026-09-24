@@ -49,6 +49,9 @@ const ok = (value: unknown, status = 200) =>
 async function body(req: Request) {
   const raw = await req.text();
   assert(raw.length <= 20_000, 413, "Request too large.");
+  return parseJson(raw);
+}
+function parseJson(raw: string) {
   try {
     return JSON.parse(raw);
   } catch {
@@ -143,7 +146,7 @@ async function dispatch(req: Request, ctx: Context) {
       .update(`${stamp}.${raw}`)
       .digest("hex");
     assert(
-      signature.length === expected.length &&
+      /^[a-f0-9]{64}$/i.test(signature) &&
         timingSafeEqual(Buffer.from(signature), Buffer.from(expected)),
       403,
       "Invalid callback signature.",
@@ -156,33 +159,22 @@ async function dispatch(req: Request, ctx: Context) {
         action: z.enum(["join", "leave"]),
         eventId: z.string().min(8).max(150),
       })
-      .parse(JSON.parse(raw));
+      .parse(parseJson(raw));
     const actor = await db.user.findUnique({
       where: { id: d.participantId },
       select: publicUser,
     });
     assert(actor?.enabled, 403, "Account unavailable.");
-    // A repeated join/leave is idempotent per connection. The bridge must use a fresh connectionId for every reconnect.
-    const receipt = await db.authThrottle.upsert({
-      where: { key: `webhook:${d.eventId}` },
-      create: { key: `webhook:${d.eventId}`, attempts: 1 },
-      update: { attempts: { increment: 1 } },
-    });
-    if (receipt.attempts > 1) return ok({ success: true, duplicate: true });
-    try {
-      return ok(
-        await recordPresence(
-          d.workshopId,
-          actor,
-          d.action,
-          d.connectionId,
-          "webhook",
-        ),
-      );
-    } catch (e) {
-      await db.authThrottle.delete({ where: { key: `webhook:${d.eventId}` } });
-      throw e;
-    }
+    return ok(
+      await recordPresence(
+        d.workshopId,
+        actor,
+        d.action,
+        d.connectionId,
+        "webhook",
+        d.eventId,
+      ),
+    );
   }
   const actor = await requireUser();
   if (root === "dashboard" && !post) return ok(await dashboard(actor));

@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { api, ErrorBox } from "./common";
+import { BrowserPresence } from "@/lib/browser-presence";
 type Config = {
   room: string;
   domain: string;
@@ -39,31 +40,23 @@ export function Meeting({
     let jitsi: Jitsi | undefined;
     let timer: ReturnType<typeof setInterval> | undefined;
     let joined = false;
-    let heartbeatBusy = false;
-    const connectionId = crypto.randomUUID();
-    const presence = async (action: "join" | "heartbeat" | "leave") => {
-      if (!participant) return;
-      try {
-        await api(`workshops/${workshopId}/presence`, { action, connectionId });
-        setError("");
-      } catch (e) {
-        setError(
-          e instanceof Error ? e.message : "Attendance connection failed.",
-        );
-      }
-    };
+    const presence = new BrowserPresence(
+      (action, connectionId) =>
+        api(
+          `workshops/${workshopId}/presence`,
+          { action, connectionId },
+          { keepalive: action === "leave" },
+        ),
+      (message) => {
+        if (!disposed) setError(message);
+      },
+    );
     const leave = () => {
       if (!joined) return;
       joined = false;
       clearInterval(timer);
-      if (participant)
-        void fetch(`/api/workshops/${workshopId}/presence`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action: "leave", connectionId }),
-          keepalive: true,
-        });
-      setStatus("You have left the meeting.");
+      if (participant) presence.leave();
+      if (!disposed) setStatus("You have left the meeting.");
     };
     const load = async () => {
       try {
@@ -97,16 +90,13 @@ export function Meeting({
           },
         });
         jitsi.addListener("videoConferenceJoined", () => {
-          if (disposed) return;
+          if (disposed || joined) return;
           joined = true;
           setStatus("Connected to workshop");
-          void presence("join");
-          timer = setInterval(async () => {
-            if (!joined || heartbeatBusy) return;
-            heartbeatBusy = true;
-            await presence("heartbeat");
-            heartbeatBusy = false;
-          }, 10_000);
+          if (participant) {
+            presence.join();
+            timer = setInterval(() => presence.heartbeat(), 10_000);
+          }
         });
         jitsi.addListener("videoConferenceLeft", leave);
         jitsi.addListener("readyToClose", leave);

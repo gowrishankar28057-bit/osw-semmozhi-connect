@@ -1,6 +1,6 @@
 import { SignJWT } from "jose";
 import { transaction, member } from "./workshops";
-import { assert } from "./errors";
+import { AppError, assert } from "./errors";
 import { type Actor } from "./auth";
 import { db } from "./db";
 export async function meetingConfig(id: string, actor: Actor) {
@@ -54,39 +54,63 @@ export async function recordPresence(
   action: "join" | "heartbeat" | "leave",
   connectionId: string,
   source: "browser" | "webhook" = "browser",
+  eventId?: string,
 ) {
   assert(actor.role === "PARTICIPANT", 403, "Participant attendance only.");
   if (source === "browser" && process.env.PRESENCE_MODE !== "browser")
     return { success: true, trackedBy: "server" };
-  return transaction(id, async (tx, w) => {
+  const result = await transaction(id, async (tx, w) => {
+    // Serialize deduplication with the presence write. A failed transaction
+    // leaves no receipt, so the bridge can retry the same event safely.
+    const receiptKey =
+      source === "webhook" && eventId ? `webhook:${id}:${eventId}` : undefined;
+    if (
+      receiptKey &&
+      (await tx.authThrottle.findUnique({ where: { key: receiptKey } }))
+    )
+      return { success: true, duplicate: true };
     await member(tx, w, actor);
     assert(w.status === "ONGOING", 409, "The workshop is not ongoing.");
     const s = await tx.workshopSession.findUniqueOrThrow({
       where: { workshopId: id },
     });
     const now = new Date();
-    const open = await tx.meetingPresence.findMany({
+    const previous = await tx.meetingPresence.findFirst({
       where: {
         sessionId: s.id,
         participantId: actor.id,
         connectionId,
-        leftAt: null,
         source,
       },
+      orderBy: { joinedAt: "desc" },
     });
-    const current = open.at(-1);
+    const current = previous?.leftAt === null ? previous : undefined;
+    const finish = async () => {
+      if (receiptKey)
+        await tx.authThrottle.create({
+          data: { key: receiptKey, attempts: 1 },
+        });
+      return { success: true };
+    };
+    if (previous?.leftAt) {
+      if (source === "browser" && action !== "leave")
+        return { success: false, expired: true };
+      return finish();
+    }
     if (action === "join") {
       if (
         current &&
         (source === "webhook" ||
           now.getTime() - current.lastSeenAt.getTime() < 30_000)
       )
-        return { success: true };
-      if (current)
+        return finish();
+      if (current) {
         await tx.meetingPresence.update({
           where: { id: current.id },
           data: { leftAt: new Date(current.lastSeenAt.getTime() + 15_000) },
         });
+        return { success: false, expired: true };
+      }
       await tx.meetingPresence.create({
         data: {
           sessionId: s.id,
@@ -106,11 +130,7 @@ export async function recordPresence(
           where: { id: current.id },
           data: { leftAt: new Date(current.lastSeenAt.getTime() + 15_000) },
         });
-        assert(
-          action !== "heartbeat",
-          409,
-          "Attendance connection expired. Leave and rejoin the meeting.",
-        );
+        if (action === "heartbeat") return { success: false, expired: true };
       } else
         await tx.meetingPresence.update({
           where: { id: current.id },
@@ -119,12 +139,35 @@ export async function recordPresence(
               ? { leftAt: now, lastSeenAt: now }
               : { lastSeenAt: now },
         });
+    } else if (action === "leave") {
+      // A leave may arrive before its join. Remember it as a zero-length
+      // segment so a delayed join cannot reopen an abandoned connection.
+      await tx.meetingPresence.create({
+        data: {
+          sessionId: s.id,
+          participantId: actor.id,
+          connectionId,
+          joinedAt: now,
+          lastSeenAt: now,
+          leftAt: now,
+          source,
+        },
+      });
     } else
       assert(
         action !== "heartbeat",
         409,
         "Join the meeting before reporting presence.",
+        "PRESENCE_MISSING",
       );
-    return { success: true };
+    return finish();
   });
+  // Throw after commit so closing a stale segment is not rolled back.
+  if ("expired" in result)
+    throw new AppError(
+      409,
+      "Attendance connection expired. Reconnecting attendance…",
+      "PRESENCE_EXPIRED",
+    );
+  return result;
 }

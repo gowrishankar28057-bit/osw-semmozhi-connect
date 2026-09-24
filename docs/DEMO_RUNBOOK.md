@@ -26,3 +26,9 @@ Local generated settings use DEMO_MODE=true, PRESENCE_MODE=browser and meet.jit.
 ## Mandatory negative cases
 
 Participant Admin endpoint call denied; other organizer edit denied; unregistered QR denied; invalid signature denied; expired/previous QR denied; duplicate scan handled; QR without meeting presence cannot issue certificate; exact 90% eligible and 89.99% ineligible; overlapping reconnect segments cannot double count; disabled organizer cannot keep using an old session.
+
+## Verified automated rehearsal
+
+The production build passes the 81-assertion local API workflow, including a real two-minute QR rotation and a generated certificate PDF. `npm test` covers attendance boundaries and browser presence request ordering. `npm run test:presence` uses PostgreSQL and real time to verify concurrent webhook retries, failure rollback, closed connections, reconnect isolation and a stale heartbeat after 31 seconds. These tests supply meeting events themselves and do not establish that Jitsi media or physical cameras worked.
+
+During the manual rehearsal, leave and rejoin Jitsi while remaining on the same workshop page. Confirm the reconnect produces a separate segment. Temporarily disconnect the participant network for over 30 seconds; after reconnection confirm that the unobserved gap is excluded and attendance resumes from a new server timestamp. Ending the workshop must hide QR open/close controls.

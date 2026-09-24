@@ -27,8 +27,14 @@ User update: continue locally with environment placeholders. Do not provision/de
 
 ## Checkpoint status
 
-Initial implementation for phases 1–16 exists. Local PostgreSQL migration and seed passed. The attendance unit suite (7 tests), local API/security workflow (81 assertions), TypeScript check, lint, production build and dependency audit all pass. The supplied certificate template has been rendered and visually inspected. The animated frontend layer has been checked at a narrow responsive viewport and includes a reduced-motion fallback. Live Jitsi, physical QR scanning, five-device acceptance and production deployment remain pending. No full jury acceptance claim. See HANDOFF.md for the exact next task.
+Initial implementation for phases 1–16 exists. Local PostgreSQL migration and seed passed. The attendance/lifecycle unit suite (12 tests), PostgreSQL presence/replay suite, local API/security workflow (81 assertions), TypeScript check, lint and production build all pass. The last dependency audit passed. The supplied certificate template has been rendered and visually inspected. The animated frontend layer has been checked at a narrow responsive viewport and includes a reduced-motion fallback. Live Jitsi, physical QR scanning, five-device acceptance and production deployment remain pending. No full jury acceptance claim. See HANDOFF.md for the exact next task.
 
 ## Certificate treatment
 
 Keep supplied PNG byte-for-byte. Cover only variable sample text with a white fill in the generated PDF, then draw participant, workshop, speaker, date, attendance, certificate ID, issue date and QR. Keep the printed signatures/artwork as supplied. No assertion is made that the sample signatories personally signed dynamically issued certificates.
+
+## Attendance reliability checkpoint
+
+Completed reconnect request ordering, duplicate join suppression, initial-join retry, fresh connection IDs after expiry, atomic trusted-callback receipts, and conservative handling of leave-before-join. Stale segment closure now commits even when the caller receives an expiry error. Inactive workshop QR controls are hidden. Zero-length leave records do not appear as successful meeting joins.
+
+Validation: 12 unit tests; dedicated PostgreSQL presence/replay tests with real 31-second expiry; the 81-assertion API workflow against a production build; Admin login/dashboard browser verification; TypeScript, lint and production build. Physical devices/live Jitsi and external hosting remain pending as described in HANDOFF.md.

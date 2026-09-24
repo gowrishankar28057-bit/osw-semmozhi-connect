@@ -56,6 +56,8 @@ Signup explicitly creates PARTICIPANT regardless of submitted role. User passwor
 - Unit tests for attendance math and a local API integration workflow covering registration, role authorization, workshop lifecycle, presence, QR verification/rotation, certificate issuance/PDF access, notifications, community, materials and reset safeguards.
 - Meeting-room secrets are stripped from dashboard/list responses and returned only by the membership-gated `/meeting` endpoint.
 - QR challenge timestamps preserve millisecond precision while JWT expiry remains compatible with jose second-based claims.
+- Meeting reconnects now use fresh connection IDs, ignore duplicate Jitsi join events, order join/heartbeat/leave requests, retry failed initial joins and start a new segment after server expiry. Requests time out after 20 seconds. No reconnect is backdated.
+- Trusted callback receipts and presence changes commit together under the workshop row lock. Failed callbacks leave no receipt; concurrent retries produce one write. Closed connections cannot reopen. A leave arriving before join creates a zero-length tombstone, excluded from the meeting-joined indicator and attendance duration.
 
 ## Partially completed / unimplemented
 
@@ -66,9 +68,8 @@ Signup explicitly creates PARTICIPANT regardless of submitted role. User passwor
 ## Known bugs / review items
 
 - `attendanceWindow` automatic midpoint check is request-driven by active polling. It is not a background timer when no clients are polling.
-- QR close controls should not show success when session is not active; review return handling and UI gating.
-- Browser heartbeats have a bounded 15-second grace; confirm reconnect and abrupt-disconnect behavior.
-- Trusted callback receipt uses AuthThrottle as a replay ledger; improve transactional replay handling and timestamp ordering before production.
+- Browser segments older than 30 seconds expire at lastSeenAt + 15 seconds. Closure now commits before the API returns PRESENCE_EXPIRED. Unit and database tests cover reconnect races and real-time stale expiry; actual Jitsi network-disconnect behavior remains to be checked on devices.
+- Trusted callback receipts still use AuthThrottle with workshop-scoped webhook keys. Receipts now commit atomically. An external trusted bridge must supply fresh connection IDs for reconnects and maintain reliable delivery; server receipt timestamps remain the time source.
 - Login/signup throttle needs IP/global abuse protection for production, beyond current per-email limit.
 - Exact certificate background contains sample signatories. They remain part of user-supplied artwork. Variable text is masked in PDF; inspect the resulting PDF for alignment and Unicode behavior.
 
@@ -77,14 +78,16 @@ Signup explicitly creates PARTICIPANT regardless of submitted role. User passwor
 - `npm install`: completed, Prisma client generated.
 - `prisma migrate deploy`: passed against local PostgreSQL.
 - `npm run db:seed`: passed, seeded only requested users.
-- `npm test`: passed, 7 attendance-math assertions/tests.
+- `npm test`: passed, 12 tests covering attendance math and browser connection lifecycle.
+- `npm run test:presence`: passed against local PostgreSQL: concurrent replay, failed-callback retry, leave-before-join, reconnect isolation, zero-length report filtering, and stale closure after 31 real seconds.
 - `npm run test:integration`: passed, 81 API/security/workflow assertions against local PostgreSQL; the test used real server time for session duration and QR rotation and generated a private PDF for visual QA.
 - `npm run typecheck`: passed.
 - `npm run lint`: passed with no findings.
 - `npm run build`: passed with Next.js 16.3.6; all 23 routes compiled. The build used `D:\\osw-build-tmp` for temporary files because the system drive was nearly full.
 - `npm audit --omit=dev --audit-level=high`: passed with 0 vulnerabilities after the `deepmerge-ts` override.
 - Certificate PDF visual QA passed against the supplied template: artwork remains intact, dynamic fields and verification QR render, and Unicode Tamil font embedding is available.
-- Browser visual QA confirmed the login artwork and motion styles at a narrow responsive viewport; the document now declares smooth scrolling explicitly for Next.js route transitions. The local dashboard preview was blocked once by the system drive reaching 0 bytes while PostgreSQL/Next dev were writing caches. The database was restarted and seeded successfully afterward.
+- Browser visual QA confirmed the login artwork and motion styles at a narrow responsive viewport. Production Admin login and the database-backed dashboard were also verified after fixing local runtime disk pressure.
+- This machine has little free space on C:. Only the generated `.next/cache` directory was moved to `D:/osw-build-tmp/osw-next-cache-20260924`, with a local directory junction in its original location. This ignored cache setup is machine-specific; source, database and deployment settings were not relocated. TEMP/TMP also use `D:/osw-build-tmp` for local builds. Do not delete unrelated files to free space.
 - No physical-device, live Jitsi or production deployment acceptance has been claimed.
 
 ## Required environment variables
@@ -104,6 +107,10 @@ npm run db:seed
 npm run dev
 npm run typecheck
 npm run lint
+npm test
+npm run test:presence
+# With the app running on NEXT_PUBLIC_APP_URL:
+npm run test:integration
 npm run build
 npm start
 ```
@@ -137,9 +144,9 @@ All routes implemented in `src/app/api/[...path]/route.ts`:
 
 ## Jitsi details
 
-`src/components/meeting.tsx` loads External API from configured JITSI_DOMAIN, opens an embedded conference, and listens to videoConferenceJoined/videoConferenceLeft/readyToClose. A per-component UUID identifies a connection. Participant sends join then heartbeat every 10s, leave uses keepalive fetch; server supplies timestamps. Default local domain meet.jit.si may require moderator login and external network/camera permission. Client browser events are forgeable; do not describe this mode as tamper-proof.
+`src/components/meeting.tsx` loads External API from configured JITSI_DOMAIN, opens an embedded conference, and listens to videoConferenceJoined/videoConferenceLeft/readyToClose. `src/lib/browser-presence.ts` owns the connection lifecycle: a fresh UUID identifies each confirmed join; duplicate joined events are ignored; requests are ordered within each connection. Failed joins retry on the next heartbeat. PRESENCE_EXPIRED/PRESENCE_MISSING trigger a fresh segment without backdating. Participants send heartbeats every 10s; leave uses keepalive fetch. The server supplies timestamps. Default local domain meet.jit.si may require moderator login and external network/camera permission. Client browser events are forgeable; do not describe this mode as tamper-proof.
 
-Production PRESENCE_MODE=webhook ignores browser attendance writes. Trusted adapter POST JSON: workshopId, participantId, connectionId, action (join/leave), eventId. Headers: x-osw-timestamp (Unix seconds), x-osw-signature (hex HMAC-SHA256 of `timestamp.rawBody`, keyed with JITSI_WEBHOOK_SECRET). Adapter must map authenticated Jitsi user identity and unique reconnect connection IDs. No adapter is implemented yet.
+Production PRESENCE_MODE=webhook ignores browser attendance writes. Trusted adapter POST JSON: workshopId, participantId, connectionId, action (join/leave), eventId. Headers: x-osw-timestamp (Unix seconds), x-osw-signature (hex HMAC-SHA256 of `timestamp.rawBody`, keyed with JITSI_WEBHOOK_SECRET). Adapter must map authenticated Jitsi user identity and unique reconnect connection IDs. Retries must reuse eventId and payload; re-sign with a fresh request timestamp if needed (30-second acceptance window). Receipts are stored as `webhook:<workshopId>:<eventId>` in the same transaction as presence. Late joins cannot reopen closed connections. No external Jitsi adapter is implemented yet.
 
 ## QR details
 

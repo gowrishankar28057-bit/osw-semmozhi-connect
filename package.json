@@ -11,6 +11,7 @@
     "lint": "eslint .",
     "test": "tsx --test tests/*.test.ts",
     "test:integration": "tsx --env-file=.env tests/integration.ts",
+    "test:presence": "tsx --env-file=.env tests/presence.integration.ts",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate deploy",
     "db:seed": "tsx --env-file=.env prisma/seed.ts",

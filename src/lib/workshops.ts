@@ -373,7 +373,7 @@ export async function attendanceRows(id: string, actor: Actor) {
         participant: r.participant.name,
         participantId: r.participantId,
         status: r.status,
-        meetingJoined: presence.length > 0,
+        meetingJoined: presence.some((p) => !p.leftAt || p.leftAt > p.joinedAt),
         qrVerified: record?.qrVerified ?? false,
         verifiedAt: record?.verifiedAt,
         ...stats,

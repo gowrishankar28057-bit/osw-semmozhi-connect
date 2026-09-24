@@ -9,15 +9,25 @@ import {
   LoaderCircle,
 } from "lucide-react";
 import type { Workshop } from "@/lib/types";
-export async function api<T>(path: string, data?: unknown): Promise<T> {
+export async function api<T>(
+  path: string,
+  data?: unknown,
+  options?: { keepalive?: boolean },
+): Promise<T> {
   const res = await fetch(`/api/${path}`, {
     method: data === undefined ? "GET" : "POST",
     headers: data === undefined ? {} : { "Content-Type": "application/json" },
     body: data === undefined ? undefined : JSON.stringify(data),
     cache: "no-store",
+    signal: AbortSignal.timeout(20_000),
+    keepalive: options?.keepalive,
   });
   const result = await res.json();
-  if (!res.ok) throw new Error(result.error || "Request failed.");
+  if (!res.ok)
+    throw Object.assign(new Error(result.error || "Request failed."), {
+      code: result.code,
+      status: res.status,
+    });
   return result;
 }
 export function usePoll<T>(path: string, interval = 3000) {
