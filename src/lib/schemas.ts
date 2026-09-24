@@ -1,11 +1,25 @@
 import { z } from "zod";
 const name = z.string().trim().min(2).max(100);
+const email = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .max(254)
+  .pipe(z.email({ error: "Enter the full email address, e.g. prem@osw.demo." }));
+const role = z.enum(["ADMIN", "ORGANIZER", "PARTICIPANT"]).optional();
+// Login only needs a non-empty password; a wrong one is reported as incorrect.
 export const credentials = z.object({
-  email: z.email().toLowerCase().max(254),
-  password: z.string().min(8).max(72),
-  role: z.enum(["ADMIN", "ORGANIZER", "PARTICIPANT"]).optional(),
+  email,
+  password: z.string().min(1, "Enter your password.").max(72),
+  role,
 });
-export const account = credentials.extend({
+export const account = z.object({
+  email,
+  password: z
+    .string()
+    .min(8, "Password must be at least 8 characters.")
+    .max(72, "Password must be at most 72 characters."),
+  role,
   name,
   department: z.string().trim().max(120).default(""),
 });
